@@ -12,6 +12,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
 
 class Passport_Widget extends Typecho_Widget
 {
@@ -137,10 +138,10 @@ class Passport_Widget extends Typecho_Widget
         require 'PHPMailer/Exception.php';
         require 'PHPMailer/PHPMailer.php';
         require 'PHPMailer/SMTP.php';
+
         $mail = new PHPMailer(true);
         try {
             $mail->CharSet = "UTF-8";
-            $mail->SMTPDebug = 0;
             $mail->isSMTP();
             $mail->Host = $this->config->host;
             $mail->SMTPAuth = true;
@@ -167,6 +168,7 @@ class Passport_Widget extends Typecho_Widget
 
             return $mail->send();
         } catch (Exception $e) {
+            $this->notice->set(_t('邮件发送失败: ' . $mail->ErrorInfo), 'error');
             return false;
         }
     }
@@ -249,5 +251,4 @@ class Passport_Widget extends Typecho_Widget
         $result = file_get_contents($url, false, $context);
         return $result;
     }
-
 }

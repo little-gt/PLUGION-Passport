@@ -96,5 +96,4 @@ class Passport_Plugin implements Typecho_Plugin_Interface
      * @return void
      */
     public static function personalConfig(Typecho_Widget_Helper_Form $form){}
-    
 }
