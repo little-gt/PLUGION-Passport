@@ -1,25 +1,22 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php
-include __TYPECHO_ADMIN_DIR__ . 'common.php'; // Use constant
+include __TYPECHO_ADMIN_DIR__ . 'common.php';
 
-// Get plugin config for CAPTCHA
 $plugin_config = Typecho_Widget::widget('Widget_Options')->plugin('Passport');
-
 $menu->title = _t('重置密码');
-include __TYPECHO_ADMIN_DIR__ . 'header.php'; // Use constant
+include __TYPECHO_ADMIN_DIR__ . 'header.php';
 ?>
     <style>
         body { font-family: "Microsoft YaHei", tahoma, arial, 'Hiragino Sans GB', '\5b8b\4f53', sans-serif; }
         .typecho-logo { margin: 50px 0 30px; text-align: center; }
         .typecho-table-wrap { padding: 50px 30px; }
         .typecho-page-title h2 { margin: 0 0 30px; font-weight: 500; font-size: 20px; text-align: center; }
-        /* label:after { content: " *"; color: #ed1c24; } */ /* Removed as per Typecho style */
         .btn { width: 100%; height: auto; padding: 10px 16px; font-size: 18px; line-height: 1.33; }
         .captcha-container { margin-bottom: 15px; display: flex; justify-content: center; }
     </style>
     <div class="body container">
         <div class="typecho-logo">
-            <h1><a href="<?php $options->siteUrl(); ?>"><?php $options->title(); ?></a></h1>
+            <h1><a href="<?php $this->options->siteUrl(); ?>"><?php $this->options->title(); ?></a></h1>
         </div>
 
         <div class="row typecho-page-main">
@@ -29,7 +26,31 @@ include __TYPECHO_ADMIN_DIR__ . 'header.php'; // Use constant
                     <div class="typecho-page-title">
                         <h2><?php _e('重置密码'); ?></h2>
                     </div>
-                    <?php $this->resetForm()->render(); // Render the form from widget ?>
+                    <?php
+                    // The form action is now handled by $this->resetForm()
+                    $reset_form = $this->resetForm(); // Get the form object
+                    ob_start();
+                    $reset_form->render();
+                    $form_html = ob_get_clean();
+
+                    $csrf_input = $this->security->getTokenInput();
+                    if (strpos($form_html, '</form>') !== false && method_exists($this->security, 'getTokenInput')) {
+                        $submit_marker = '<button type="submit"';
+                        $pos_submit = strripos($form_html, $submit_marker);
+                        if ($pos_submit !== false) {
+                            $ul_submit_start_marker = '<ul class="typecho-option typecho-option-submit"';
+                            $pos_ul_submit_start = strripos(substr($form_html, 0, $pos_submit), $ul_submit_start_marker);
+                            if ($pos_ul_submit_start !== false) {
+                                $form_html = substr_replace($form_html, $csrf_input, $pos_ul_submit_start, 0);
+                            } else {
+                                $form_html = str_replace('</form>', $csrf_input . '</form>', $form_html);
+                            }
+                        } else {
+                            $form_html = str_replace('</form>', $csrf_input . '</form>', $form_html);
+                        }
+                    }
+                    echo $form_html;
+                    ?>
 
                     <!-- CAPTCHA Integration -->
                     <?php if ($plugin_config->captchaProvider != 'none' && $plugin_config->captchaProvider != 'recaptcha_v3'): ?>
@@ -41,41 +62,42 @@ include __TYPECHO_ADMIN_DIR__ . 'header.php'; // Use constant
                             <?php endif; ?>
                         </div>
                     <?php endif; ?>
-                    <!-- End CAPTCHA -->
 
                     <?php if ($plugin_config->captchaProvider == 'recaptcha_v3' && !empty($plugin_config->recaptcha_v3_sitekey)): ?>
                         <input type="hidden" name="recaptcha_v3_token" id="recaptcha_v3_token">
                     <?php endif; ?>
 
                     <p class="more-link" style="text-align:center; margin-top: 20px;">
-                        <a href="<?php $options->siteUrl(); ?>"><?php _e('返回首页'); ?></a>
+                        <a href="<?php $this->options->siteUrl(); ?>"><?php _e('返回首页'); ?></a>
                         •
-                        <a href="<?php $options->adminUrl('login.php'); ?>"><?php _e('用户登录'); ?></a>
+                        <a href="<?php $this->options->adminUrl('login.php'); ?>"><?php _e('用户登录'); ?></a>
                     </p>
                 </div>
             </div>
         </div>
     </div>
 <?php
-include __TYPECHO_ADMIN_DIR__ . 'common-js.php'; // Use constant
+include __TYPECHO_ADMIN_DIR__ . 'common-js.php';
 
-// CAPTCHA Scripts
 if ($plugin_config->captchaProvider == 'recaptcha_v2' && !empty($plugin_config->recaptcha_v2_sitekey)) {
     echo '<script src="https://www.recaptcha.net/recaptcha/api.js" async defer></script>';
 } elseif ($plugin_config->captchaProvider == 'recaptcha_v3' && !empty($plugin_config->recaptcha_v3_sitekey)) {
-    $resetUrlWithToken = Typecho_Common::url('/passport/reset?token=' . urlencode($this->request->token), $this->options->index);
+    $resetUrlWithTokenForJS = Typecho_Common::url('/passport/reset?token=' . urlencode($this->request->get('token')), $this->options->index);
     echo '<script src="https://www.recaptcha.net/recaptcha/api.js?render=' . htmlspecialchars($plugin_config->recaptcha_v3_sitekey) . '"></script>';
     echo "<script>
-    var form = document.querySelector('form[action=\"" . $resetUrlWithToken . "\"]');
-    if (form) {
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
-            grecaptcha.ready(function() {
-                grecaptcha.execute('" . htmlspecialchars($plugin_config->recaptcha_v3_sitekey) . "', {action: 'submit_new_password'}).then(function(token) {
-                    document.getElementById('recaptcha_v3_token').value = token;
-                    form.submit();
+    var resetFormEl = document.querySelector('form[action=\"" . htmlspecialchars($resetUrlWithTokenForJS, ENT_QUOTES) . "\"]');
+    if (resetFormEl) {
+        resetFormEl.addEventListener('submit', function(event) {
+            var tokenInput = resetFormEl.querySelector('#recaptcha_v3_token');
+            if (!tokenInput || !tokenInput.value) {
+                event.preventDefault();
+                grecaptcha.ready(function() {
+                    grecaptcha.execute('" . htmlspecialchars($plugin_config->recaptcha_v3_sitekey) . "', {action: 'submit_new_password'}).then(function(token) {
+                        if (tokenInput) { tokenInput.value = token; }
+                        resetFormEl.submit();
+                    });
                 });
-            });
+            }
         });
     }
     </script>";
@@ -83,5 +105,5 @@ if ($plugin_config->captchaProvider == 'recaptcha_v2' && !empty($plugin_config->
     echo '<script src="https://js.hcaptcha.com/1/api.js" async defer></script>';
 }
 
-include __TYPECHO_ADMIN_DIR__ . 'footer.php'; // Use constant
+include __TYPECHO_ADMIN_DIR__ . 'footer.php';
 ?>
