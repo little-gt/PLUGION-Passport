@@ -11,7 +11,6 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  */
 
 // Ensure PHPMailer classes are available
-// Adjust these paths if your PHPMailer files are in a 'src' subdirectory (e.g., 'PHPMailer/src/Exception.php')
 require_once 'PHPMailer/Exception.php';
 require_once 'PHPMailer/PHPMailer.php';
 require_once 'PHPMailer/SMTP.php';
@@ -31,21 +30,87 @@ class Passport_Widget extends Typecho_Widget
         $this->notice = parent::widget('Widget_Notice');
         $this->options = parent::widget('Widget_Options');
         $this->config = $this->options->plugin('Passport');
+
+        // 创建令牌表
+        $this->createTokenTable();
     }
 
-    public function execute(){}
+    public function execute() {}
+
+    /**
+     * 创建密码重置令牌表
+     */
+    private function createTokenTable()
+    {
+        $db = Typecho_Db::get();
+        $prefix = $db->getPrefix();
+        $table = $prefix . 'password_reset_tokens';
+
+        // 检查表是否已存在
+        $tables = $db->fetchAll($db->query("SHOW TABLES LIKE '{$table}'"));
+        if (empty($tables)) {
+            $query = "CREATE TABLE `{$table}` (
+                `token` VARCHAR(64) NOT NULL,
+                `uid` INT(10) UNSIGNED NOT NULL,
+                `created_at` INT(10) UNSIGNED NOT NULL,
+                `used` TINYINT(1) DEFAULT 0,
+                PRIMARY KEY (`token`),
+                INDEX `uid` (`uid`),
+                INDEX `created_at` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+            $db->query($query);
+            error_log('Passport: Created password_reset_tokens table');
+        }
+    }
+
+    /**
+     * 清理过期或已使用的令牌
+     */
+    private function cleanTokens()
+    {
+        $db = Typecho_Db::get();
+        $expireTime = $this->options->gmtTime - 3600; // 1 小时
+        $db->query($db->delete('table.password_reset_tokens')
+            ->where('created_at < ? OR used = ?', $expireTime, 1));
+        error_log('Passport: Cleaned expired or used tokens before: ' . $expireTime);
+    }
+
+    /**
+     * 生成 HMAC-SHA256 签名
+     */
+    private function generateSignature($token, $uid, $createdAt)
+    {
+        if (empty($this->config->secretKey)) {
+            error_log('Passport: HMAC secret key is not configured');
+            return '';
+        }
+        $data = $token . '.' . $uid . '.' . $createdAt;
+        return hash_hmac('sha256', $data, $this->config->secretKey);
+    }
+
+    /**
+     * 验证 HMAC-SHA256 签名
+     */
+    private function verifySignature($token, $uid, $createdAt, $signature)
+    {
+        if (empty($this->config->secretKey)) {
+            error_log('Passport: HMAC secret key is not configured, skipping signature verification');
+            return true; // 如果未配置密钥，跳过验证（不推荐）
+        }
+        $expectedSignature = $this->generateSignature($token, $uid, $createdAt);
+        return hash_equals($expectedSignature, $signature);
+    }
 
     public function doForgot()
     {
-        // For security, ensure the template is always included outside the POST block
-        // to render the form even if there are POST validation errors.
         require_once 'template/forgot.php';
+
+        // 清理过期或已使用令牌
+        $this->cleanTokens();
 
         if ($this->request->isPost()) {
             if ($error = $this->forgotForm()->validate()) {
                 $this->notice->set($error, 'error');
-                // Don't return false directly as it stops further rendering.
-                // Instead, the notice will be displayed on the current page.
                 return;
             }
 
@@ -71,13 +136,12 @@ class Passport_Widget extends Typecho_Widget
                     break;
                 case 'none':
                 default:
-                    $captchaVerified = true; // No captcha selected, so it's "verified"
+                    $captchaVerified = true;
                     break;
             }
 
             if (!$captchaVerified) {
                 $this->notice->set(_t('请完成人机身份验证以后再提交您的重置密码请求'), 'error');
-                // Keep the user on the current page to re-attempt captcha
                 return;
             }
 
@@ -89,11 +153,27 @@ class Passport_Widget extends Typecho_Widget
                 return;
             }
 
-            // Generate a hash based on unchanging user data (name, mail, and the *current* password)
-            // This hash ensures the token is invalidated if the user's base info or password changes before reset.
-            $hashOfUserData = Typecho_Common::hash($user['name'] . $user['mail'] . $user['password']);
-            $token = base64_encode($user['uid'] . '.' . $hashOfUserData . '.' . $this->options->gmtTime);
-            $url = Typecho_Common::url('/passport/reset?token=' . urlencode($token), $this->options->index);
+            // 生成唯一令牌
+            $token = Typecho_Common::randString(64);
+            $createdAt = $this->options->gmtTime;
+
+            // 生成签名
+            $signature = $this->generateSignature($token, $user['uid'], $createdAt);
+
+            // 存储令牌到数据库
+            $db->query($db->insert('table.password_reset_tokens')
+                ->rows([
+                    'token' => $token,
+                    'uid' => $user['uid'],
+                    'created_at' => $createdAt,
+                    'used' => 0
+                ]));
+
+            // 构造重置链接，包含签名
+            $url = Typecho_Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index);
+
+            // 记录生成的令牌
+            error_log('Passport: Generated token: ' . $token . ', signature: ' . $signature . ' for user: ' . $user['mail']);
 
             if ($this->sendResetEmail($user, $url)) {
                 $this->notice->set(_t('邮件成功发送, 请注意查收'), 'success');
@@ -105,59 +185,59 @@ class Passport_Widget extends Typecho_Widget
 
     public function doReset()
     {
-        // For security, ensure the template is always included outside the POST block
         require_once 'template/reset.php';
 
+        // 清理过期或已使用令牌
+        $this->cleanTokens();
+
         $token = $this->request->filter('strip_tags', 'trim', 'xss')->token;
+        $signature = $this->request->filter('strip_tags', 'trim', 'xss')->signature;
 
-        // Check if token is valid before attempting decode/explode
-        if (empty($token) || strpos($token, '.') === false) {
+        if (empty($token)) {
             $this->notice->set(_t('无效的重置链接'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
 
-        // Base64 decode and split token parts
-        $decodedToken = base64_decode($token);
-        if ($decodedToken === false) {
-            $this->notice->set(_t('无效的重置链接'), 'notice');
+        // 记录接收的令牌和签名
+        error_log('Passport: Received token: ' . $token . ', signature: ' . ($signature ?? 'none'));
+
+        $db = Typecho_Db::get();
+
+        // 查询令牌
+        $tokenRecord = $db->fetchRow($db->select()->from('table.password_reset_tokens')
+            ->where('token = ?', urldecode($token))
+            ->where('used = ?', 0));
+
+        if (empty($tokenRecord)) {
+            error_log('Passport: Token not found or already used: ' . $token);
+            $this->notice->set(_t('该链接已失效或已使用, 请重新获取'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
 
-        @list($uid, $tokenHashOfUserData, $timeStamp) = explode('.', $decodedToken);
-
-        // Validate token parts
-        if (empty($uid) || empty($tokenHashOfUserData) || empty($timeStamp) || !is_numeric($uid) || !is_numeric($timeStamp)) {
-            $this->notice->set(_t('无效的重置链接'), 'notice');
-            $this->response->redirect($this->options->loginUrl);
-            return;
-        }
-
-        $currentTimeStamp = $this->options->gmtTime;
-
-        // Token expiration check (1 hour = 3600 seconds)
-        if (($currentTimeStamp - $timeStamp) > 3600) {
+        // 验证令牌是否过期（1 小时）
+        if (($this->options->gmtTime - $tokenRecord['created_at']) > 3600) {
+            error_log('Passport: Token expired - Created: ' . $tokenRecord['created_at'] . ', Current: ' . $this->options->gmtTime);
             $this->notice->set(_t('该链接已失效, 请重新获取'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
 
-        $db = Typecho_Db::get();
-        $user = $db->fetchRow($db->select()->from('table.users')->where('uid = ?', $uid));
-
-        if (empty($user)) {
-            $this->notice->set(_t('用户不存在或链接已失效'), 'notice');
+        // 验证签名
+        if (!$this->verifySignature($token, $tokenRecord['uid'], $tokenRecord['created_at'], urldecode($signature))) {
+            error_log('Passport: Invalid signature for token: ' . $token);
+            $this->notice->set(_t('令牌验证失败, 请重新获取'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
 
-        // Re-generate the hash from current user data to validate the token
-        $currentHashOfUserData = Typecho_Common::hash($user['name'] . $user['mail'] . $user['password']);
+        // 查询用户
+        $user = $db->fetchRow($db->select()->from('table.users')->where('uid = ?', $tokenRecord['uid']));
 
-        // Compare the hash from the token with the hash generated from current user data
-        if ($currentHashOfUserData !== $tokenHashOfUserData) {
-            $this->notice->set(_t('该链接已失效或用户信息已更改, 请重新获取'), 'notice');
+        if (empty($user)) {
+            error_log('Passport: User not found for UID: ' . $tokenRecord['uid']);
+            $this->notice->set(_t('用户不存在或链接已失效'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
@@ -190,7 +270,7 @@ class Passport_Widget extends Typecho_Widget
                     break;
                 case 'none':
                 default:
-                    $captchaVerified = true; // No captcha selected, so it's "verified"
+                    $captchaVerified = true;
                     break;
             }
 
@@ -199,29 +279,33 @@ class Passport_Widget extends Typecho_Widget
                 return;
             }
 
-            // Using Typecho's PasswordHash class for password hashing
-            $hasher = new PasswordHash(8, true); // 8 is a good cost, true for portable hash
+            $hasher = new PasswordHash(8, true);
             $password = $hasher->HashPassword($this->request->password);
 
+            // 更新用户密码
             $update = $db->query($db->update('table.users')
                 ->rows(array('password' => $password))
                 ->where('uid = ?', $user['uid']));
 
             if (!$update) {
                 $this->notice->set(_t('重置密码失败'), 'error');
-            } else {
-                $this->notice->set(_t('重置密码成功'), 'success');
-                $this->response->redirect($this->options->loginUrl);
+                return;
             }
+
+            // 标记令牌为已使用
+            $db->query($db->update('table.password_reset_tokens')
+                ->rows(array('used' => 1))
+                ->where('token = ?', urldecode($token)));
+
+            error_log('Passport: Password reset successful, token marked as used: ' . $token);
+
+            $this->notice->set(_t('重置密码成功'), 'success');
+            $this->response->redirect($this->options->loginUrl);
         }
     }
 
     /**
      * Verify reCAPTCHA v2 response
-     *
-     * @param string $response The g-recaptcha-response from the client
-     * @param string $secretKey The reCAPTCHA secret key
-     * @return bool
      */
     private function verifyRecaptcha($response, $secretKey)
     {
@@ -233,7 +317,6 @@ class Passport_Widget extends Typecho_Widget
             'secret' => $secretKey,
             'response' => $response
         ];
-        // Use recaptcha.net for users who might have issues with google.com
         $recaptcha_json_result = $this->send_post('https://www.recaptcha.net/recaptcha/api/siteverify', $post_data);
         $recaptcha_result = json_decode($recaptcha_json_result, true);
 
@@ -242,10 +325,6 @@ class Passport_Widget extends Typecho_Widget
 
     /**
      * Verify hCaptcha response
-     *
-     * @param string $response The h-captcha-response from the client
-     * @param string $secretKey The hCaptcha secret key
-     * @return bool
      */
     private function verifyHcaptcha($response, $secretKey)
     {
@@ -263,27 +342,22 @@ class Passport_Widget extends Typecho_Widget
         return isset($hcaptcha_result['success']) && $hcaptcha_result['success'];
     }
 
-
+    /**
+     * Send reset email
+     */
     private function sendResetEmail($user, $url)
     {
-        $mail = new PHPMailer(true); // true enables exceptions
+        $mail = new PHPMailer(true);
         try {
             $mail->CharSet = "UTF-8";
-            $mail->SMTPDebug = 0; // 0 for production, 2 for client and server messages
+            $mail->SMTPDebug = 0;
             $mail->isSMTP();
             $mail->Host = $this->config->host;
+            $mail->SMTPSecure = $this->config->secure === 'none' ? false : $this->config->secure;
             $mail->SMTPAuth = true;
             $mail->Username = $this->config->username;
             $mail->Password = $this->config->password;
             $mail->Port = $this->config->port;
-
-            if ('none' != $this->config->secure) {
-                // SMTPSecure can be 'ssl' or 'tls'
-                $mail->SMTPSecure = $this->config->secure;
-            } else {
-                // If 'none' is selected, explicitly disable SMTPSecure
-                $mail->SMTPSecure = false;
-            }
 
             $mail->setFrom($this->config->username, $this->options->title);
             $mail->addAddress($user['mail'], $user['name']);
@@ -297,31 +371,28 @@ class Passport_Widget extends Typecho_Widget
             $mail->isHTML(true);
             $mail->Subject = Helper::options()->title . ' - 密码重置';
             $mail->Body = $emailBody;
-            $mail->AltBody = strip_tags($emailBody); // Plain text alternative for email clients that don't support HTML
+            $mail->AltBody = strip_tags($emailBody);
 
             return $mail->send();
         } catch (Exception $e) {
-            // Log the error for debugging purposes if needed
-            // error_log('PHPMailer Error: ' . $e->getMessage());
+            error_log('Passport: PHPMailer Error: ' . $e->getMessage());
             return false;
         }
     }
 
-    public function forgotForm() {
+    /**
+     * Forgot password form
+     */
+    public function forgotForm()
+    {
         $form = new Typecho_Widget_Helper_Form(NULL, Typecho_Widget_Helper_Form::POST_METHOD);
 
-        $mail = new Typecho_Widget_Helper_Form_Element_Text('mail',
-            NULL,
-            NULL,
-            _t('邮箱'),
-            _t('请输入您忘记密码的账号所对应的邮箱地址'));
+        $mail = new Typecho_Widget_Helper_Form_Element_Text('mail', NULL, NULL, _t('邮箱'), _t('请输入您忘记密码的账号所对应的邮箱地址'));
         $form->addInput($mail);
 
-        /** 用户动作 */
         $do = new Typecho_Widget_Helper_Form_Element_Hidden('do', NULL, 'mail');
         $form->addInput($do);
 
-        /** 提交按钮 */
         $submit = new Typecho_Widget_Helper_Form_Element_Submit('submit', NULL, _t('提交'));
         $submit->input->setAttribute('class', 'btn primary');
         $form->addItem($submit);
@@ -332,32 +403,24 @@ class Passport_Widget extends Typecho_Widget
         return $form;
     }
 
-    public function resetForm() {
+    /**
+     * Reset password form
+     */
+    public function resetForm()
+    {
         $form = new Typecho_Widget_Helper_Form(NULL, Typecho_Widget_Helper_Form::POST_METHOD);
 
-        /** 新密码 */
-        $password = new Typecho_Widget_Helper_Form_Element_Password('password',
-            NULL,
-            NULL,
-            _t('新密码'),
-            _t('建议使用特殊字符与字母、数字的混编样式,以增加系统安全性.'));
+        $password = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, NULL, _t('新密码'), _t('建议使用特殊字符与字母、数字的混编样式,以增加系统安全性.'));
         $password->input->setAttribute('class', 'w-100');
         $form->addInput($password);
 
-        /** 新密码确认 */
-        $confirm = new Typecho_Widget_Helper_Form_Element_Password('confirm',
-            NULL,
-            NULL,
-            _t('密码确认'),
-            _t('请确认你的密码, 与上面输入的密码保持一致.'));
+        $confirm = new Typecho_Widget_Helper_Form_Element_Password('confirm', NULL, NULL, _t('密码确认'), _t('请确认你的密码, 与上面输入的密码保持一致.'));
         $confirm->input->setAttribute('class', 'w-100');
         $form->addInput($confirm);
 
-        /** 用户动作 */
         $do = new Typecho_Widget_Helper_Form_Element_Hidden('do', NULL, 'password');
         $form->addInput($do);
 
-        /** 提交按钮 */
         $submit = new Typecho_Widget_Helper_Form_Element_Submit('submit', NULL, _t('更新密码'));
         $submit->input->setAttribute('class', 'btn primary');
         $form->addItem($submit);
@@ -369,7 +432,9 @@ class Passport_Widget extends Typecho_Widget
         return $form;
     }
 
-    /** Generic POST request sender (for captcha verification) */
+    /**
+     * Generic POST request sender
+     */
     private function send_post($url, $post_data)
     {
         $postdata = http_build_query($post_data);
@@ -378,19 +443,11 @@ class Passport_Widget extends Typecho_Widget
                 'method' => 'POST',
                 'header' => 'Content-type: application/x-www-form-urlencoded',
                 'content' => $postdata,
-                'timeout' => 20 // 超时时间（单位:s）
-            ),
-            // Add stream_context_create options for SSL verification if needed, especially for older PHP versions
-            // 'ssl' => array(
-            //     'verify_peer' => true,
-            //     'verify_peer_name' => true,
-            //     'allow_self_signed' => false,
-            //     'cafile' => '/path/to/cacert.pem', // Path to your CA bundle if default isn't working
-            // ),
+                'timeout' => 20
+            )
         );
         $context = stream_context_create($options);
-        $result = @file_get_contents($url, false, $context); // Suppress warnings
+        $result = @file_get_contents($url, false, $context);
         return $result;
     }
-
 }
