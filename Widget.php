@@ -10,6 +10,12 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @license GNU General Public License 2.0
  */
 
+// Ensure PHPMailer classes are available
+// Adjust these paths if your PHPMailer files are in a 'src' subdirectory (e.g., 'PHPMailer/src/Exception.php')
+require_once 'PHPMailer/Exception.php';
+require_once 'PHPMailer/PHPMailer.php';
+require_once 'PHPMailer/SMTP.php';
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -31,17 +37,47 @@ class Passport_Widget extends Typecho_Widget
 
     public function doForgot()
     {
+        // For security, ensure the template is always included outside the POST block
+        // to render the form even if there are POST validation errors.
         require_once 'template/forgot.php';
 
         if ($this->request->isPost()) {
             if ($error = $this->forgotForm()->validate()) {
                 $this->notice->set($error, 'error');
-                return false;
+                // Don't return false directly as it stops further rendering.
+                // Instead, the notice will be displayed on the current page.
+                return;
             }
 
-            if (!$this->verifyReCaptcha($_POST["g-recaptcha-response"])) {
+            $captchaType = $this->config->captchaType;
+            $gRecaptchaResponse = $this->request->get('g-recaptcha-response');
+            $hCaptchaResponse = $this->request->get('h-captcha-response');
+            $captchaVerified = false;
+
+            switch ($captchaType) {
+                case 'recaptcha':
+                    if (empty($this->config->sitekeyRecaptcha) || empty($this->config->secretkeyRecaptcha)) {
+                        $this->notice->set(_t('reCAPTCHA配置不完整, 请联系管理员。'), 'error');
+                        return;
+                    }
+                    $captchaVerified = $this->verifyRecaptcha($gRecaptchaResponse, $this->config->secretkeyRecaptcha);
+                    break;
+                case 'hcaptcha':
+                    if (empty($this->config->sitekeyHcaptcha) || empty($this->config->secretkeyHcaptcha)) {
+                        $this->notice->set(_t('hCaptcha配置不完整, 请联系管理员。'), 'error');
+                        return;
+                    }
+                    $captchaVerified = $this->verifyHcaptcha($hCaptchaResponse, $this->config->secretkeyHcaptcha);
+                    break;
+                case 'none':
+                default:
+                    $captchaVerified = true; // No captcha selected, so it's "verified"
+                    break;
+            }
+
+            if (!$captchaVerified) {
                 $this->notice->set(_t('请完成人机身份验证以后再提交您的重置密码请求'), 'error');
-                $this->response->goBack();
+                // Keep the user on the current page to re-attempt captcha
                 return;
             }
 
@@ -50,13 +86,14 @@ class Passport_Widget extends Typecho_Widget
 
             if (empty($user)) {
                 $this->notice->set(_t('请检查您的邮箱地址是否拼写错误或者是否注册'), 'error');
-                return false;
+                return;
             }
 
-            $hashString = $user['name'] . $user['mail'] . $user['password'];
-            $hashValidate = Typecho_Common::hash($hashString);
-            $token = base64_encode($user['uid'] . '.' . $hashValidate . '.' . $this->options->gmtTime);
-            $url = Typecho_Common::url('/passport/reset?token=' . $token, $this->options->index);
+            // Generate a hash based on unchanging user data (name, mail, and the *current* password)
+            // This hash ensures the token is invalidated if the user's base info or password changes before reset.
+            $hashOfUserData = Typecho_Common::hash($user['name'] . $user['mail'] . $user['password']);
+            $token = base64_encode($user['uid'] . '.' . $hashOfUserData . '.' . $this->options->gmtTime);
+            $url = Typecho_Common::url('/passport/reset?token=' . urlencode($token), $this->options->index);
 
             if ($this->sendResetEmail($user, $url)) {
                 $this->notice->set(_t('邮件成功发送, 请注意查收'), 'success');
@@ -68,10 +105,38 @@ class Passport_Widget extends Typecho_Widget
 
     public function doReset()
     {
+        // For security, ensure the template is always included outside the POST block
+        require_once 'template/reset.php';
+
         $token = $this->request->filter('strip_tags', 'trim', 'xss')->token;
-        list($uid, $hashValidate, $timeStamp) = explode('.', base64_decode($token));
+
+        // Check if token is valid before attempting decode/explode
+        if (empty($token) || strpos($token, '.') === false) {
+            $this->notice->set(_t('无效的重置链接'), 'notice');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
+
+        // Base64 decode and split token parts
+        $decodedToken = base64_decode($token);
+        if ($decodedToken === false) {
+            $this->notice->set(_t('无效的重置链接'), 'notice');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
+
+        @list($uid, $tokenHashOfUserData, $timeStamp) = explode('.', $decodedToken);
+
+        // Validate token parts
+        if (empty($uid) || empty($tokenHashOfUserData) || empty($timeStamp) || !is_numeric($uid) || !is_numeric($timeStamp)) {
+            $this->notice->set(_t('无效的重置链接'), 'notice');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
+
         $currentTimeStamp = $this->options->gmtTime;
 
+        // Token expiration check (1 hour = 3600 seconds)
         if (($currentTimeStamp - $timeStamp) > 3600) {
             $this->notice->set(_t('该链接已失效, 请重新获取'), 'notice');
             $this->response->redirect($this->options->loginUrl);
@@ -81,30 +146,61 @@ class Passport_Widget extends Typecho_Widget
         $db = Typecho_Db::get();
         $user = $db->fetchRow($db->select()->from('table.users')->where('uid = ?', $uid));
 
-        $hashString = $user['name'] . $user['mail'] . $user['password'];
-        $hashValidate = Typecho_Common::hashValidate($hashString, $hashValidate);
-
-        if (!$hashValidate) {
-            $this->notice->set(_t('该链接已失效, 请重新获取'), 'notice');
+        if (empty($user)) {
+            $this->notice->set(_t('用户不存在或链接已失效'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
 
-        require_once 'template/reset.php';
+        // Re-generate the hash from current user data to validate the token
+        $currentHashOfUserData = Typecho_Common::hash($user['name'] . $user['mail'] . $user['password']);
+
+        // Compare the hash from the token with the hash generated from current user data
+        if ($currentHashOfUserData !== $tokenHashOfUserData) {
+            $this->notice->set(_t('该链接已失效或用户信息已更改, 请重新获取'), 'notice');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
 
         if ($this->request->isPost()) {
             if ($error = $this->resetForm()->validate()) {
                 $this->notice->set($error, 'error');
-                return false;
-            }
-
-            if (!$this->verifyReCaptcha($_POST["g-recaptcha-response"])) {
-                $this->notice->set(_t('请完成人机身份验证以后再提交您的重置密码请求'), 'error');
-                $this->response->goBack();
                 return;
             }
 
-            $hasher = new PasswordHash(8, true);
+            $captchaType = $this->config->captchaType;
+            $gRecaptchaResponse = $this->request->get('g-recaptcha-response');
+            $hCaptchaResponse = $this->request->get('h-captcha-response');
+            $captchaVerified = false;
+
+            switch ($captchaType) {
+                case 'recaptcha':
+                    if (empty($this->config->sitekeyRecaptcha) || empty($this->config->secretkeyRecaptcha)) {
+                        $this->notice->set(_t('reCAPTCHA配置不完整, 请联系管理员。'), 'error');
+                        return;
+                    }
+                    $captchaVerified = $this->verifyRecaptcha($gRecaptchaResponse, $this->config->secretkeyRecaptcha);
+                    break;
+                case 'hcaptcha':
+                    if (empty($this->config->sitekeyHcaptcha) || empty($this->config->secretkeyHcaptcha)) {
+                        $this->notice->set(_t('hCaptcha配置不完整, 请联系管理员。'), 'error');
+                        return;
+                    }
+                    $captchaVerified = $this->verifyHcaptcha($hCaptchaResponse, $this->config->secretkeyHcaptcha);
+                    break;
+                case 'none':
+                default:
+                    $captchaVerified = true; // No captcha selected, so it's "verified"
+                    break;
+            }
+
+            if (!$captchaVerified) {
+                $this->notice->set(_t('请完成人机身份验证以后再提交您的重置密码请求'), 'error');
+                return;
+            }
+
+            // Using Typecho's PasswordHash class for password hashing
+            $hasher = new PasswordHash(8, true); // 8 is a good cost, true for portable hash
             $password = $hasher->HashPassword($this->request->password);
 
             $update = $db->query($db->update('table.users')
@@ -120,27 +216,60 @@ class Passport_Widget extends Typecho_Widget
         }
     }
 
-    private function verifyReCaptcha($response)
+    /**
+     * Verify reCAPTCHA v2 response
+     *
+     * @param string $response The g-recaptcha-response from the client
+     * @param string $secretKey The reCAPTCHA secret key
+     * @return bool
+     */
+    private function verifyRecaptcha($response, $secretKey)
     {
+        if (empty($response)) {
+            return false;
+        }
+
         $post_data = [
-            'secret' => $this->config->secretkey,
+            'secret' => $secretKey,
             'response' => $response
         ];
+        // Use recaptcha.net for users who might have issues with google.com
         $recaptcha_json_result = $this->send_post('https://www.recaptcha.net/recaptcha/api/siteverify', $post_data);
         $recaptcha_result = json_decode($recaptcha_json_result, true);
 
-        return isset($recaptcha_result['success']) ? $recaptcha_result['success'] : false;
+        return isset($recaptcha_result['success']) && $recaptcha_result['success'];
     }
+
+    /**
+     * Verify hCaptcha response
+     *
+     * @param string $response The h-captcha-response from the client
+     * @param string $secretKey The hCaptcha secret key
+     * @return bool
+     */
+    private function verifyHcaptcha($response, $secretKey)
+    {
+        if (empty($response)) {
+            return false;
+        }
+
+        $post_data = [
+            'secret' => $secretKey,
+            'response' => $response
+        ];
+        $hcaptcha_json_result = $this->send_post('https://hcaptcha.com/siteverify', $post_data);
+        $hcaptcha_result = json_decode($hcaptcha_json_result, true);
+
+        return isset($hcaptcha_result['success']) && $hcaptcha_result['success'];
+    }
+
 
     private function sendResetEmail($user, $url)
     {
-        require 'PHPMailer/Exception.php';
-        require 'PHPMailer/PHPMailer.php';
-        require 'PHPMailer/SMTP.php';
-        $mail = new PHPMailer(true);
+        $mail = new PHPMailer(true); // true enables exceptions
         try {
             $mail->CharSet = "UTF-8";
-            $mail->SMTPDebug = 0;
+            $mail->SMTPDebug = 0; // 0 for production, 2 for client and server messages
             $mail->isSMTP();
             $mail->Host = $this->config->host;
             $mail->SMTPAuth = true;
@@ -149,7 +278,11 @@ class Passport_Widget extends Typecho_Widget
             $mail->Port = $this->config->port;
 
             if ('none' != $this->config->secure) {
+                // SMTPSecure can be 'ssl' or 'tls'
                 $mail->SMTPSecure = $this->config->secure;
+            } else {
+                // If 'none' is selected, explicitly disable SMTPSecure
+                $mail->SMTPSecure = false;
             }
 
             $mail->setFrom($this->config->username, $this->options->title);
@@ -164,9 +297,12 @@ class Passport_Widget extends Typecho_Widget
             $mail->isHTML(true);
             $mail->Subject = Helper::options()->title . ' - 密码重置';
             $mail->Body = $emailBody;
+            $mail->AltBody = strip_tags($emailBody); // Plain text alternative for email clients that don't support HTML
 
             return $mail->send();
         } catch (Exception $e) {
+            // Log the error for debugging purposes if needed
+            // error_log('PHPMailer Error: ' . $e->getMessage());
             return false;
         }
     }
@@ -233,20 +369,27 @@ class Passport_Widget extends Typecho_Widget
         return $form;
     }
 
-    /**reCaptcha的send方法 */
+    /** Generic POST request sender (for captcha verification) */
     private function send_post($url, $post_data)
     {
         $postdata = http_build_query($post_data);
         $options = array(
             'http' => array(
                 'method' => 'POST',
-                'header' => 'Content-type:application/x-www-form-urlencoded',
+                'header' => 'Content-type: application/x-www-form-urlencoded',
                 'content' => $postdata,
                 'timeout' => 20 // 超时时间（单位:s）
-            )
+            ),
+            // Add stream_context_create options for SSL verification if needed, especially for older PHP versions
+            // 'ssl' => array(
+            //     'verify_peer' => true,
+            //     'verify_peer_name' => true,
+            //     'allow_self_signed' => false,
+            //     'cafile' => '/path/to/cacert.pem', // Path to your CA bundle if default isn't working
+            // ),
         );
         $context = stream_context_create($options);
-        $result = file_get_contents($url, false, $context);
+        $result = @file_get_contents($url, false, $context); // Suppress warnings
         return $result;
     }
 
