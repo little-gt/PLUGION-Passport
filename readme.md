@@ -1,7 +1,7 @@
 # Passport - Typecho 密码找回插件
 
-[![版本](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/typecho-fans/plugins/tree/master/Passport)
-[![兼容性](https://img.shields.io/badge/Typecho-1.1%2B-green.svg)](http://typecho.org)
+[![版本](https://img.shields.io/badge/version-0.0.3-blue.svg)](https://github.com/typecho-fans/plugins/tree/master/Passport)
+[![兼容性](https://img.shields.io/badge/Typecho-1.1%2B-green.svg)](https://forum.typecho.org/viewtopic.php?p=61523)
 [![License](https://img.shields.io/badge/license-GPLv2-brightgreen.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
 ![截图](/screenshot.png)
@@ -17,11 +17,11 @@
         ```
         /usr/plugins/
         └── Passport/
-            ├── Plugin.php
-            ├── Widget.php
+            ├── Plugin.php // 插件激活与卸载
+            ├── Widget.php // 插件主逻辑模块
             ├── template/
-            │   ├── forgot.php
-            │   ├── reset.php
+            │   ├── forgot.php // 页面 - 请求找回密码
+            │   ├── reset.php  // 页面 - 设置新的密码
             │   ├── common.php
             │   └── header.php
             └── PHPMailer/       <-- PHPMailer 库文件夹
@@ -95,8 +95,13 @@
 1.  **添加找回密码入口 (推荐)：**
     *   为了方便用户，建议您在网站的登录页面 (通常是 `admin/login.php` 或主题的登录模板) 添加一个“忘记密码？”的链接，指向 `您的域名/passport/forgot`。
     *   例如，在 `admin/login.php` 文件中，您可以在登录表单附近添加：
-        ```html
-        <p><a href="<?php Typecho_Common::url('/passport/forgot', Helper::options()->index); ?>">忘记密码？</a></p>
+        ```php
+        <?php
+           $activates = array_keys(Typecho_Plugin::export()['activated']);
+           if (in_array('Passport', $activates)) {
+               echo '<a href="' . Typecho_Common::url('passport/forgot', $options->index) . '">' . '忘记密码' . '</a>';
+           }
+        ?>
         ```
 2.  **用户找回密码流程：**
     *   用户访问 `您的域名/passport/forgot` 页面。
@@ -131,6 +136,9 @@
 
 ## 版本历史
 
+*   **v0.0.3**
+    *   新增：添加 HMAC 签名验证机制，通过随机的 HMAC 字符串进行签名加密。
+    *   优化：优化 Token 的处理机制，在每次访问forgot时检查 Token 并且清除过期的 Token 。
 *   **v0.0.2**
     *   新增：支持 hCaptcha。
     *   新增：可在 reCAPTCHA v2、hCaptcha、不使用验证码之间选择。
