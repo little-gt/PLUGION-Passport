@@ -57,7 +57,7 @@ include 'header.php';
                         <h2>重置密码</h2>
                     </div>
                     <?php $this->notice->render(); ?>
-                    <form action="<?php $options->doReset(); ?>?token=<?php echo htmlspecialchars($this->request->token); ?>" method="post" enctype="application/x-www-form-urlencoded">
+                    <form action="<?php $options->doReset(); ?>?token=<?php echo htmlspecialchars($this->request->token); ?>&signature=<?php echo htmlspecialchars($this->request->signature); ?>" method="post" enctype="application/x-www-form-urlencoded">
                         <ul class="typecho-option" id="typecho-option-item-password-0"><li>
                                 <label class="typecho-label" for="password-0-1">新密码</label>
                                 <input id="password-0-1" name="password" type="password" class="w-100">
