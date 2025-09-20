@@ -6,6 +6,7 @@ $menu->title = _t('重置密码');
 $captchaType = $this->config->captchaType;
 $recaptchaSiteKey = $this->config->sitekeyRecaptcha;
 $hcaptchaSiteKey = $this->config->sitekeyHcaptcha;
+$geetestCaptchaId = $this->config->captchaIdGeetest;
 
 include 'header.php';
 ?>
@@ -37,12 +38,9 @@ include 'header.php';
             font-size: 18px;
             line-height: 1.33;
         }
-        /* Updated style for captcha container for left alignment */
+        /* Style for captcha container for consistent alignment */
         .captcha-container {
-            /* display: flex; */ /* Removed for left alignment */
-            /* justify-content: center; */ /* Removed for left alignment */
-            margin-bottom: 15px; /* Keep space below the captcha */
-            /* The captcha widget itself will now align left within this block container */
+            margin-bottom: 15px;
         }
     </style>
     <div class="body container">
@@ -77,6 +75,14 @@ include 'header.php';
                             <div class="captcha-container">
                                 <div class="h-captcha" data-sitekey="<?php echo htmlspecialchars($hcaptchaSiteKey); ?>"></div>
                             </div>
+                        <?php elseif ($captchaType === 'geetest' && !empty($geetestCaptchaId)): ?>
+                            <div class="captcha-container">
+                                <div id="captcha-geetest"></div>
+                            </div>
+                            <input type="hidden" name="lot_number" id="lot_number">
+                            <input type="hidden" name="captcha_output" id="captcha_output">
+                            <input type="hidden" name="pass_token" id="pass_token">
+                            <input type="hidden" name="gen_time" id="gen_time">
                         <?php endif; ?>
 
                         <ul class="typecho-option typecho-option-submit" id="typecho-option-item-submit-3"><li>
@@ -101,6 +107,27 @@ include __ADMIN_DIR__ . '/common-js.php';
 <?php elseif ($captchaType === 'hcaptcha' && !empty($hcaptchaSiteKey)): ?>
     <!-- hCaptcha API -->
     <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+<?php elseif ($captchaType === 'geetest' && !empty($geetestCaptchaId)): ?>
+    <!-- Geetest v4 API -->
+    <script src="https://static.geetest.com/v4/gt4.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            initGeetest4({
+                captchaId: '<?php echo htmlspecialchars($geetestCaptchaId); ?>'
+            }, function (captcha) {
+                captcha.appendTo('#captcha-geetest');
+                captcha.onSuccess(function () {
+                    var result = captcha.getValidate();
+                    if (result) {
+                        document.getElementById('lot_number').value = result.lot_number;
+                        document.getElementById('captcha_output').value = result.captcha_output;
+                        document.getElementById('pass_token').value = result.pass_token;
+                        document.getElementById('gen_time').value = result.gen_time;
+                    }
+                });
+            });
+        });
+    </script>
 <?php endif; ?>
 <?php
 include __ADMIN_DIR__ . '/footer.php';

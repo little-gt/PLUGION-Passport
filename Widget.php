@@ -115,24 +115,31 @@ class Passport_Widget extends Typecho_Widget
             }
 
             $captchaType = $this->config->captchaType;
-            $gRecaptchaResponse = $this->request->get('g-recaptcha-response');
-            $hCaptchaResponse = $this->request->get('h-captcha-response');
             $captchaVerified = false;
 
             switch ($captchaType) {
                 case 'recaptcha':
                     if (empty($this->config->sitekeyRecaptcha) || empty($this->config->secretkeyRecaptcha)) {
-                        $this->notice->set(_t('reCAPTCHA配置不完整, 请联系管理员。'), 'error');
-                        return;
+                        $this->notice->set(_t('reCAPTCHA配置不完整, 请联系管理员。'), 'error'); return;
                     }
-                    $captchaVerified = $this->verifyRecaptcha($gRecaptchaResponse, $this->config->secretkeyRecaptcha);
+                    $captchaVerified = $this->verifyRecaptcha($this->request->get('g-recaptcha-response'), $this->config->secretkeyRecaptcha);
                     break;
                 case 'hcaptcha':
                     if (empty($this->config->sitekeyHcaptcha) || empty($this->config->secretkeyHcaptcha)) {
-                        $this->notice->set(_t('hCaptcha配置不完整, 请联系管理员。'), 'error');
-                        return;
+                        $this->notice->set(_t('hCaptcha配置不完整, 请联系管理员。'), 'error'); return;
                     }
-                    $captchaVerified = $this->verifyHcaptcha($hCaptchaResponse, $this->config->secretkeyHcaptcha);
+                    $captchaVerified = $this->verifyHcaptcha($this->request->get('h-captcha-response'), $this->config->secretkeyHcaptcha);
+                    break;
+                case 'geetest':
+                    if (empty($this->config->captchaIdGeetest) || empty($this->config->captchaKeyGeetest)) {
+                        $this->notice->set(_t('Geetest配置不完整, 请联系管理员。'), 'error'); return;
+                    }
+                    $captchaVerified = $this->verifyGeetest(
+                        $this->request->get('lot_number'),
+                        $this->request->get('captcha_output'),
+                        $this->request->get('pass_token'),
+                        $this->request->get('gen_time')
+                    );
                     break;
                 case 'none':
                 default:
@@ -249,24 +256,31 @@ class Passport_Widget extends Typecho_Widget
             }
 
             $captchaType = $this->config->captchaType;
-            $gRecaptchaResponse = $this->request->get('g-recaptcha-response');
-            $hCaptchaResponse = $this->request->get('h-captcha-response');
             $captchaVerified = false;
 
             switch ($captchaType) {
                 case 'recaptcha':
                     if (empty($this->config->sitekeyRecaptcha) || empty($this->config->secretkeyRecaptcha)) {
-                        $this->notice->set(_t('reCAPTCHA配置不完整, 请联系管理员。'), 'error');
-                        return;
+                        $this->notice->set(_t('reCAPTCHA配置不完整, 请联系管理员。'), 'error'); return;
                     }
-                    $captchaVerified = $this->verifyRecaptcha($gRecaptchaResponse, $this->config->secretkeyRecaptcha);
+                    $captchaVerified = $this->verifyRecaptcha($this->request->get('g-recaptcha-response'), $this->config->secretkeyRecaptcha);
                     break;
                 case 'hcaptcha':
                     if (empty($this->config->sitekeyHcaptcha) || empty($this->config->secretkeyHcaptcha)) {
-                        $this->notice->set(_t('hCaptcha配置不完整, 请联系管理员。'), 'error');
-                        return;
+                        $this->notice->set(_t('hCaptcha配置不完整, 请联系管理员。'), 'error'); return;
                     }
-                    $captchaVerified = $this->verifyHcaptcha($hCaptchaResponse, $this->config->secretkeyHcaptcha);
+                    $captchaVerified = $this->verifyHcaptcha($this->request->get('h-captcha-response'), $this->config->secretkeyHcaptcha);
+                    break;
+                case 'geetest':
+                    if (empty($this->config->captchaIdGeetest) || empty($this->config->captchaKeyGeetest)) {
+                        $this->notice->set(_t('Geetest配置不完整, 请联系管理员。'), 'error'); return;
+                    }
+                    $captchaVerified = $this->verifyGeetest(
+                        $this->request->get('lot_number'),
+                        $this->request->get('captcha_output'),
+                        $this->request->get('pass_token'),
+                        $this->request->get('gen_time')
+                    );
                     break;
                 case 'none':
                 default:
@@ -340,6 +354,48 @@ class Passport_Widget extends Typecho_Widget
         $hcaptcha_result = json_decode($hcaptcha_json_result, true);
 
         return isset($hcaptcha_result['success']) && $hcaptcha_result['success'];
+    }
+
+    /**
+     * Verify Geetest v4 response
+     */
+    private function verifyGeetest($lot_number, $captcha_output, $pass_token, $gen_time)
+    {
+        if (empty($lot_number) || empty($captcha_output) || empty($pass_token) || empty($gen_time)) {
+            return false;
+        }
+
+        $captcha_id = $this->config->captchaIdGeetest;
+        $captcha_key = $this->config->captchaKeyGeetest;
+
+        // 1. 生成签名
+        $sign_token = hash_hmac('sha256', $lot_number, $captcha_key);
+
+        // 2. 准备请求数据
+        $post_data = [
+            "lot_number" => $lot_number,
+            "captcha_output" => $captcha_output,
+            "pass_token" => $pass_token,
+            "gen_time" => $gen_time,
+            "sign_token" => $sign_token,
+        ];
+
+        // 3. 发送请求
+        $api_server = 'http://gcaptcha4.geetest.com';
+        $url = $api_server . '/validate?captcha_id=' . $captcha_id;
+
+        $geetest_json_result = $this->send_post($url, $post_data);
+
+        if ($geetest_json_result === false) {
+            error_log('Passport: request geetest api fail');
+            // 在无法连接极验服务器时，可以根据安全策略选择是否放行，这里默认不放行
+            return false;
+        }
+
+        $geetest_result = json_decode($geetest_json_result, true);
+
+        return isset($geetest_result['status']) && $geetest_result['status'] === 'success' &&
+               isset($geetest_result['result']) && $geetest_result['result'] === 'success';
     }
 
     /**
