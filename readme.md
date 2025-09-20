@@ -1,6 +1,6 @@
 # Passport - Typecho 密码找回插件
 
-[![版本](https://img.shields.io/badge/version-0.0.3-blue.svg)](https://github.com/typecho-fans/plugins/tree/master/Passport)
+[![版本](https://img.shields.io/badge/version-0.0.4-blue.svg)](https://github.com/typecho-fans/plugins/tree/master/Passport)
 [![兼容性](https://img.shields.io/badge/Typecho-1.1%2B-green.svg)](https://forum.typecho.org/viewtopic.php?p=61523)
 [![License](https://img.shields.io/badge/license-GPLv2-brightgreen.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
@@ -36,10 +36,11 @@
 *   支持 SMTP 服务器配置，保证邮件发送的可靠性。
 *   可自定义密码重置邮件模板。
 *   支持多种验证码服务：
-    *   Google reCAPTCHA v2 (最新版)
+    *   Google reCAPTCHA v2
     *   hCaptcha
+    *   Geetest 4.0（极验4.0）
     *   可选择不使用验证码
-*   验证码配置项根据所选类型动态显示，界面更简洁。
+*   验证码配置项根据所选类型动态显示，界面更简洁。（修复）
 *   找回密码和重置密码页面的验证码 UI 左对齐，更美观。
 *   使用最新的 PHPMailer 库特性。
 *   安全可靠的 Token 生成与验证机制。
@@ -136,6 +137,10 @@
 
 ## 版本历史
 
+*   **v0.0.4**
+    *   新增：集成 Geetest v4 (极验) 行为验证码。
+    *   优化：动态分组的插件后台配置界面。
+    *   优化：优化了人机验证的流程逻辑，更快更安全。
 *   **v0.0.3**
     *   新增：添加 HMAC 签名验证机制，通过随机的 HMAC 字符串进行签名加密。
     *   优化：优化 Token 的处理机制，在每次访问forgot时检查 Token 并且清除过期的 Token 。
