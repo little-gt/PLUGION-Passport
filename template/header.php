@@ -1,7 +1,19 @@
 <?php
-if (!defined('__TYPECHO_ADMIN__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit; // 防止直接访问
+
+/**
+ * Passport 插件独立前端模板 - 头部
+ *
+ * @package Passport
+ * @author GARFIELDTOM
+ * @version 0.1.1
+ *
+ */
+
+// 从Widget中获取必要的配置信息
+$options = $this->options;
+$menu_title = property_exists($this, 'menu') && property_exists($this->menu, 'title') ? $this->menu->title : _t('密码找回');
+
 $header = '<link rel="stylesheet" href="' . Typecho_Common::url('normalize.css?v=' . $suffixVersion, $options->adminStaticUrl('css')) . '">
 <link rel="stylesheet" href="' . Typecho_Common::url('grid.css?v=' . $suffixVersion, $options->adminStaticUrl('css')) . '">
 <link rel="stylesheet" href="' . Typecho_Common::url('style.css?v=' . $suffixVersion, $options->adminStaticUrl('css')) . '">

@@ -3,6 +3,7 @@
 include 'common.php';
 
 $menu->title = _t('重置密码');
+$options = $this->options;
 $captchaType = $this->config->captchaType;
 $recaptchaSiteKey = $this->config->sitekeyRecaptcha;
 $hcaptchaSiteKey = $this->config->sitekeyHcaptcha;
@@ -101,8 +102,10 @@ include 'header.php';
 <?php
 include __ADMIN_DIR__ . '/common-js.php';
 ?>
+<?php // --- 按需加载 CAPTCHA 的 JavaScript --- ?>
+
 <?php if ($captchaType === 'recaptcha' && !empty($recaptchaSiteKey)): ?>
-    <!-- reCAPTCHA v2 API -->
+    <!-- Google reCAPTCHA v2 API -->
     <script src="https://www.recaptcha.net/recaptcha/api.js" async defer></script>
 <?php elseif ($captchaType === 'hcaptcha' && !empty($hcaptchaSiteKey)): ?>
     <!-- hCaptcha API -->
@@ -111,21 +114,32 @@ include __ADMIN_DIR__ . '/common-js.php';
     <!-- Geetest v4 API -->
     <script src="https://static.geetest.com/v4/gt4.js"></script>
     <script>
+        // 确保在DOM加载完毕后执行脚本
         document.addEventListener('DOMContentLoaded', function () {
-            initGeetest4({
-                captchaId: '<?php echo htmlspecialchars($geetestCaptchaId); ?>'
-            }, function (captcha) {
-                captcha.appendTo('#captcha-geetest');
-                captcha.onSuccess(function () {
-                    var result = captcha.getValidate();
-                    if (result) {
-                        document.getElementById('lot_number').value = result.lot_number;
-                        document.getElementById('captcha_output').value = result.captcha_output;
-                        document.getElementById('pass_token').value = result.pass_token;
-                        document.getElementById('gen_time').value = result.gen_time;
-                    }
+            // 检查 #captcha-geetest 元素是否存在，确保脚本只在需要时运行
+            if (document.getElementById('captcha-geetest')) {
+                initGeetest4({
+                    // [安全] 使用 htmlspecialchars 过滤PHP变量
+                    captchaId: '<?php echo htmlspecialchars($geetestCaptchaId); ?>',
+                    product: 'popup', // 使用弹出式，体验更佳
+                    lang: 'zho' // 设置语言为中文
+                }, function (captcha) {
+                    // captcha为验证码实例
+                    captcha.appendTo('#captcha-geetest'); // 将验证码插入到指定元素
+
+                    // 监听验证成功事件
+                    captcha.onSuccess(function () {
+                        var result = captcha.getValidate();
+                        if (result) {
+                            // 将验证结果填入表单的隐藏输入框中
+                            document.getElementById('lot_number').value = result.lot_number;
+                            document.getElementById('captcha_output').value = result.captcha_output;
+                            document.getElementById('pass_token').value = result.pass_token;
+                            document.getElementById('gen_time').value = result.gen_time;
+                        }
+                    });
                 });
-            });
+            }
         });
     </script>
 <?php endif; ?>
