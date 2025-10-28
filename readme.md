@@ -8,13 +8,15 @@
 
 ---
 
-> ✉️ **Passport** 是一个安全可靠的 Typecho 插件，用于为你的博客系统提供 **找回密码、重置密码** 功能，支持多种验证码系统与 SMTP 邮件配置。  
+> ✉️ **Passport** 是一个安全可靠的 Typecho 插件，用于为你的博客系统提供 **找回密码、重置密码** 功能，支持多种验证码系统与 SMTP 邮件配置。
 > 插件遵循 GPLv2 协议，免费开源。
 
 ---
 
 ## 📸 截图
-![screenshot](./screenshot.png)
+![screenshot_background](./screenshot1.png)
+
+![screenshot_frontground](./screenshot2.png)
 
 ---
 
@@ -41,6 +43,23 @@
     - 验证码类型与密钥
     - HMAC 安全密钥（自动生成）
 5. 保存配置，即可使用 `/passport/forgot` 与 `/passport/reset` 页面。
+6. 如果你想要在登录页面添加一个“找回密码”的按钮，你可以打开后台模版的“login.php”。并且参考下面的方法添加入口。
+
+``` php
+// 找到这里
+<?php if($options->allowRegister): ?>
+&bull;
+<a href="<?php $options->registerUrl(); ?>"><?php _e('用户注册'); ?></a>
+<?php endif; ?>
+
+// 在它下面插入以下代码
+<?php
+   $activates = array_keys(Typecho_Plugin::export()['activated']);
+   if (in_array('Passport', $activates)) {
+       echo '<a href="' . Typecho_Common::url('passport/forgot', $options->index) . '">' . '忘记密码' . '</a>';
+   }
+?>
+```
 
 ---
 
@@ -77,6 +96,7 @@
 ## 🧾 许可证
 
 本项目采用 [GNU General Public License v2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)。
+
 Copyright (c) 2025 GARFIELDTOM
 
 
