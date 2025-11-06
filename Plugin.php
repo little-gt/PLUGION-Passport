@@ -6,11 +6,24 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  *
  * @package Passport
  * @author GARFIELDTOM
- * @version 0.1.1
+ * @version 0.1.2
  * @link https://garfieldtom.cool/
  */
 class Passport_Plugin implements Typecho_Plugin_Interface
 {
+    /**
+     * 路由名称常量
+     */
+    const ROUTE_FORGOT_NAME = 'passport_forgot';
+    const ROUTE_RESET_NAME = 'passport_reset';
+
+    /**
+     * 路由路径常量
+     */
+    const ROUTE_FORGOT_PATH = '/passport/forgot';
+    const ROUTE_RESET_PATH = '/passport/reset';
+    const ROUTE_UNBLOCK_IP_PATH = '/action/passport-unblock';
+
     /**
      * 插件激活方法
      *
@@ -30,8 +43,10 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             self::createFailLogTable();
 
             // 注册路由
-            Helper::addRoute('passport_forgot', '/passport/forgot', 'Passport_Widget', 'doForgot');
-            Helper::addRoute('passport_reset', '/passport/reset', 'Passport_Widget', 'doReset');
+            Helper::addRoute(self::ROUTE_FORGOT_NAME, self::ROUTE_FORGOT_PATH, 'Passport_Widget', 'doForgot');
+            Helper::addRoute(self::ROUTE_RESET_NAME, self::ROUTE_RESET_PATH, 'Passport_Widget', 'doReset');
+            // 注册 IP 解封的后台操作路由
+            Helper::addAction('passport-unblock', 'Passport_Widget');
 
             // 返回激活提示
             return _t('插件已激活，请配置此插件的SMTP、验证码参数和HMAC密钥, 以使您的找回密码插件生效！');
@@ -47,7 +62,6 @@ class Passport_Plugin implements Typecho_Plugin_Interface
      * 禁用流程：
      * 1. 根据配置决定是否删除数据（表和配置）。
      * 2. 移除路由。
-     * 注意：删除操作仅在用户明确启用时执行，并添加安全检查以避免异常。
      *
      * @return void
      */
@@ -60,8 +74,9 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                 $config = Helper::options()->plugin('Passport');
             } catch (Typecho_Plugin_Exception $e) {
                 // 配置不存在，直接移除路由
-                Helper::removeRoute('passport_reset');
-                Helper::removeRoute('passport_forgot');
+                Helper::removeRoute(self::ROUTE_RESET_NAME);
+                Helper::removeRoute(self::ROUTE_FORGOT_NAME);
+                Helper::removeAction('passport-unblock');
                 return;
             }
 
@@ -80,8 +95,9 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             }
 
             // 移除路由
-            Helper::removeRoute('passport_reset');
-            Helper::removeRoute('passport_forgot');
+            Helper::removeRoute(self::ROUTE_RESET_NAME);
+            Helper::removeRoute(self::ROUTE_FORGOT_NAME);
+            Helper::removeAction('passport-unblock');
         } catch (Exception $e) {
             error_log('Passport deactivate failed: ' . $e->getMessage());
             // 不抛异常，继续禁用流程
@@ -91,22 +107,13 @@ class Passport_Plugin implements Typecho_Plugin_Interface
     /**
      * 插件配置面板
      *
-     * 构建配置表单：
-     * - SMTP设置
-     * - CAPTCHA设置（带动态切换JS）
-     * - 安全与高级设置
-     * - 邮件模板
-     * - 风险管理日志表格
-     *
      * @param Typecho_Widget_Helper_Form $form 配置表单对象
      * @return void
      */
     public static function config(Typecho_Widget_Helper_Form $form)
     {
-        // 处理解封IP请求
-        if (!empty($_POST['unblock_ip']) && self::isValidIp($_POST['unblock_ip'])) {
-            self::handleUnblockIp();
-        }
+        // IP 解封请求处理移至 Widget.php::action()
+        $actionUrl = Helper::security()->getIndex(Helper::url(self::ROUTE_UNBLOCK_IP_PATH, Helper::options()->index));
 
         // SMTP设置组
         $host = new Typecho_Widget_Helper_Form_Element_Text('host', null, 'smtp.example.com', _t('<h2>找回密码SMTP配置</h2>服务器(SMTP)'), _t('<span style="color: red;">必须</span>如: smtp.exmail.qq.com'));
@@ -162,7 +169,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         // 风险管理标题和表格（使用echo，但确保在try中或独立）
         try {
             echo '<h2>IP请求日志与封禁状态</h2>';
-            echo self::renderFailLogTable();
+            echo self::renderFailLogTable($actionUrl);
             echo '<p>出于性能考虑，只展示最近的25条记录，如果需要完整记录请查询数据库，后续将支持一键导出。</p>';
         } catch (Exception $e) {
             echo '<p style="color: red;">风险日志加载失败：' . htmlspecialchars($e->getMessage()) . '</p>';
@@ -182,33 +189,14 @@ class Passport_Plugin implements Typecho_Plugin_Interface
     public static function personalConfig(Typecho_Widget_Helper_Form $form) {}
 
     /**
-     * 处理IP解封请求
-     *
-     * 从POST获取IP，更新数据库中的locked_until为0。
-     * 显示成功通知。
-     *
-     * @return void
-     */
-    private static function handleUnblockIp()
-    {
-        $ip_to_unblock = trim($_POST['unblock_ip']);
-        $db = Typecho_Db::get();
-        $update = $db->update($db->getPrefix() . 'passport_fails')
-                     ->rows(['locked_until' => 0])
-                     ->where('ip = ?', $ip_to_unblock);
-        $db->query($update);
-        Typecho_Widget::widget('Widget_Notice')->set(_t('IP地址 %s 已成功解封。', htmlspecialchars($ip_to_unblock)), 'success');
-    }
-
-    /**
      * 渲染失败日志表格
      *
      * 查询最近25条日志，渲染HTML表格。
-     * 显示状态和解封操作。
      *
+     * @param string $actionUrl IP解封的POST目标地址
      * @return string HTML表格字符串
      */
-    private static function renderFailLogTable()
+    private static function renderFailLogTable(string $actionUrl)
     {
         $db = Typecho_Db::get();
         $prefix = $db->getPrefix();
@@ -233,7 +221,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                     $remaining_time = $log['locked_until'] - time();
                     $remaining_minutes = ceil($remaining_time / 60);
                     $status = '<span style="color: red; font-weight: bold;">封禁中</span> (剩余约 ' . $remaining_minutes . ' 分钟)';
-                    $action = '<form method="post" style="margin:0; padding:0;">' .
+                    $action = '<form method="post" action="' . $actionUrl . '" style="margin:0; padding:0;">' .
                               '<input type="hidden" name="unblock_ip" value="' . htmlspecialchars($log['ip']) . '">' .
                               '<button type="submit" class="btn btn-s btn-warn">立即解封</button>' .
                               '</form>';
@@ -257,8 +245,6 @@ class Passport_Plugin implements Typecho_Plugin_Interface
 
     /**
      * 生成验证码切换的JavaScript
-     *
-     * 动态隐藏/显示CAPTCHA配置项，根据选择的类型。
      *
      * @return string JavaScript代码
      */
@@ -321,10 +307,14 @@ JS;
      * @param int $length 密钥长度（字节）
      * @return string 十六进制编码的随机字符串
      */
-    private static function generateStrongRandomKey($length)
+    private static function generateStrongRandomKey(int $length)
     {
         if (function_exists('random_bytes')) {
-            return bin2hex(random_bytes($length)); // 更安全的随机生成
+            try {
+                return bin2hex(random_bytes($length)); // 更安全的随机生成
+            } catch (Exception $e) {
+                // Fallback if random_bytes fails unexpectedly
+            }
         }
         // Fallback to original method
         $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -340,7 +330,6 @@ JS;
      * 创建密码重置令牌表
      *
      * 表结构：token (主键), uid, created_at, used。
-     * 索引：uid, created_at。
      *
      * @return void
      */
@@ -349,22 +338,38 @@ JS;
         $db = Typecho_Db::get();
         $prefix = $db->getPrefix();
         $table = $prefix . 'password_reset_tokens';
-        $db->query("CREATE TABLE IF NOT EXISTS `{$table}` (
+
+        // 兼容 SQLite 和 PostgreSQL 的通用 SQL (移除了 UNSIGNED)
+        $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
             `token` VARCHAR(64) NOT NULL,
-            `uid` INT(10) UNSIGNED NOT NULL,
-            `created_at` INT(10) UNSIGNED NOT NULL,
+            `uid` INT(10) NOT NULL,
+            `created_at` INT(10) NOT NULL,
             `used` TINYINT(1) DEFAULT 0,
             PRIMARY KEY (`token`),
             INDEX `uid` (`uid`),
             INDEX `created_at` (`created_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        )";
+
+        // MySQL 专用 SQL (使用 UNSIGNED, ENGINE, CHARSET)
+        if (false !== strpos($db->getAdapterName(), 'Mysql')) {
+            $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
+                `token` VARCHAR(64) NOT NULL,
+                `uid` INT(10) UNSIGNED NOT NULL,
+                `created_at` INT(10) UNSIGNED NOT NULL,
+                `used` TINYINT(1) DEFAULT 0,
+                PRIMARY KEY (`token`),
+                INDEX `uid` (`uid`),
+                INDEX `created_at` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        }
+
+        $db->query($sql);
     }
 
     /**
      * 创建失败日志表
      *
      * 表结构：ip (主键), attempts, last_attempt, locked_until。
-     * 索引：locked_until。
      *
      * @return void
      */
@@ -373,24 +378,29 @@ JS;
         $db = Typecho_Db::get();
         $prefix = $db->getPrefix();
         $table = $prefix . 'passport_fails';
-        $db->query("CREATE TABLE IF NOT EXISTS `{$table}` (
+
+        // 兼容 SQLite 和 PostgreSQL 的通用 SQL (移除了 UNSIGNED)
+        $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
             `ip` VARCHAR(45) NOT NULL,
-            `attempts` INT(10) UNSIGNED NOT NULL DEFAULT 0,
-            `last_attempt` INT(10) UNSIGNED NOT NULL,
-            `locked_until` INT(10) UNSIGNED NOT NULL DEFAULT 0,
+            `attempts` INT(10) NOT NULL DEFAULT 0,
+            `last_attempt` INT(10) NOT NULL,
+            `locked_until` INT(10) NOT NULL DEFAULT 0,
             PRIMARY KEY (`ip`),
             INDEX `locked_until` (`locked_until`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    }
+        )";
 
-    /**
-     * 验证IP地址的有效性
-     *
-     * @param string $ip IP地址
-     * @return bool 是否有效
-     */
-    private static function isValidIp($ip)
-    {
-        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6);
+        // MySQL 专用 SQL (使用 UNSIGNED, ENGINE, CHARSET)
+        if (false !== strpos($db->getAdapterName(), 'Mysql')) {
+            $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
+                `ip` VARCHAR(45) NOT NULL,
+                `attempts` INT(10) UNSIGNED NOT NULL DEFAULT 0,
+                `last_attempt` INT(10) UNSIGNED NOT NULL,
+                `locked_until` INT(10) UNSIGNED NOT NULL DEFAULT 0,
+                PRIMARY KEY (`ip`),
+                INDEX `locked_until` (`locked_until`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        }
+
+        $db->query($sql);
     }
 }

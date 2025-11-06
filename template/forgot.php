@@ -1,13 +1,14 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php
+// 导入公共变量和初始化
 include 'common.php';
 
 $menu->title = _t('找回密码');
 $options = $this->options;
 $captchaType = $this->config->captchaType;
-$recaptchaSiteKey = $this->config->sitekeyRecaptcha;
-$hcaptchaSiteKey = $this->config->sitekeyHcaptcha;
-$geetestCaptchaId = $this->config->captchaIdGeetest;
+$recaptchaSiteKey = htmlspecialchars($this->config->sitekeyRecaptcha ?? '');
+$hcaptchaSiteKey = htmlspecialchars($this->config->sitekeyHcaptcha ?? '');
+$geetestCaptchaId = htmlspecialchars($this->config->captchaIdGeetest ?? '');
 
 include 'header.php';
 ?>
@@ -68,16 +69,17 @@ include 'header.php';
 
                         <?php if ($captchaType === 'recaptcha' && !empty($recaptchaSiteKey)): ?>
                             <div class="captcha-container">
-                                <div class="g-recaptcha" data-sitekey="<?php echo htmlspecialchars($recaptchaSiteKey); ?>"></div>
+                                <div class="g-recaptcha" data-sitekey="<?php echo $recaptchaSiteKey; ?>"></div>
                             </div>
                         <?php elseif ($captchaType === 'hcaptcha' && !empty($hcaptchaSiteKey)): ?>
                             <div class="captcha-container">
-                                <div class="h-captcha" data-sitekey="<?php echo htmlspecialchars($hcaptchaSiteKey); ?>"></div>
+                                <div class="h-captcha" data-sitekey="<?php echo $hcaptchaSiteKey; ?>"></div>
                             </div>
                         <?php elseif ($captchaType === 'geetest' && !empty($geetestCaptchaId)): ?>
                             <div class="captcha-container">
                                 <div id="captcha-geetest"></div>
                             </div>
+                            <!-- 隐藏字段用于回传验证结果 -->
                             <input type="hidden" name="lot_number" id="lot_number">
                             <input type="hidden" name="captcha_output" id="captcha_output">
                             <input type="hidden" name="pass_token" id="pass_token">
@@ -97,6 +99,7 @@ include 'header.php';
         </div>
     </div>
 <?php
+// Typecho 后台的公共 JS 文件
 include __ADMIN_DIR__ . '/common-js.php';
 ?>
 <?php // --- 按需加载 CAPTCHA 的 JavaScript --- ?>
@@ -113,20 +116,20 @@ include __ADMIN_DIR__ . '/common-js.php';
     <script>
         // 确保在DOM加载完毕后执行脚本
         document.addEventListener('DOMContentLoaded', function () {
-            // 检查 #captcha-geetest 元素是否存在，确保脚本只在需要时运行
-            if (document.getElementById('captcha-geetest')) {
+            const captchaElement = document.getElementById('captcha-geetest');
+            if (captchaElement) {
                 initGeetest4({
-                    // [安全] 使用 htmlspecialchars 过滤PHP变量
-                    captchaId: '<?php echo htmlspecialchars($geetestCaptchaId); ?>',
-                    product: 'popup', // 使用弹出式，体验更佳
+                    // 确保 captchaId 变量被正确过滤
+                    captchaId: '<?php echo $geetestCaptchaId; ?>',
+                    product: 'popup', // 使用弹出式
                     lang: 'zho' // 设置语言为中文
                 }, function (captcha) {
                     // captcha为验证码实例
-                    captcha.appendTo('#captcha-geetest'); // 将验证码插入到指定元素
+                    captcha.appendTo(captchaElement); // 将验证码插入到指定元素
 
                     // 监听验证成功事件
                     captcha.onSuccess(function () {
-                        var result = captcha.getValidate();
+                        const result = captcha.getValidate();
                         if (result) {
                             // 将验证结果填入表单的隐藏输入框中
                             document.getElementById('lot_number').value = result.lot_number;
@@ -141,5 +144,6 @@ include __ADMIN_DIR__ . '/common-js.php';
     </script>
 <?php endif; ?>
 <?php
+// Typecho 后台的页脚文件
 include __ADMIN_DIR__ . '/footer.php';
 ?>

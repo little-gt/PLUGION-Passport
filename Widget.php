@@ -5,7 +5,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  *
  * @package Passport
  * @copyright Copyright (c) 2025 GARFIELDTOM & 小否先生
- * @version 0.1.1
+ * @version 0.1.2
  * @license GNU General Public License 2.0
  */
 
@@ -16,8 +16,14 @@ require_once 'PHPMailer/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use Typecho\Common;
+use Typecho\Db\Exception as DbException;
+use Typecho\Widget;
+use Utils\PasswordHash;
+use Widget\ActionInterface;
+use Widget\Notice;
 
-class Passport_Widget extends Typecho_Widget
+class Passport_Widget extends Widget implements ActionInterface
 {
     private $options;
     private $config;
@@ -27,76 +33,117 @@ class Passport_Widget extends Typecho_Widget
     public function __construct($request, $response, $params = NULL)
     {
         parent::__construct($request, $response, $params);
-        $this->notice = parent::widget('Widget_Notice');
-        $this->options = parent::widget('Widget_Options');
+        $this->notice = Notice::alloc();
+        $this->options = Widget::widget('Widget_Options');
         $this->config = $this->options->plugin('Passport');
-        $this->db = Typecho_Db::get(); // [优化] 将数据库实例作为类属性，避免重复获取
+        $this->db = Typecho_Db::get();
     }
 
     /**
- * [新增] 内部通知处理方法
- * - 统一处理所有通知，并能根据特定消息格式生成倒计时。
- * @param string|array $message 消息内容
- * @param string $type          消息类型 (error, success, notice)
- */
-private function _setNotice($message, $type)
-{
-    // 若消息是数组，尝试转为字符串（如取第一个元素或使用json）
-    if (is_array($message)) {
-        // 优先取第一个元素
-        $message = reset($message);
-        // 若取到的仍不是字符串，则转为JSON或空字符串
-        if (!is_string($message)) {
-            $message = json_encode($message, JSON_UNESCAPED_UNICODE);
+     * [核心] 插件路由动作入口
+     *
+     * @return void
+     * @throws DbException
+     */
+    public function action()
+    {
+        $this->user->pass('administrator');
+        $this->security->protect();
+
+        // 处理 IP 解封请求
+        if ($this->request->isPost() && !empty($this->request->unblock_ip)) {
+            $this->handleUnblockIp($this->request->unblock_ip);
         }
+
+        // 其他 Action 可以在这里扩展
+        $this->response->goBack();
     }
 
-    // 检查是否为锁定的特殊消息格式 'LOCKED|<seconds>'
-    if (is_string($message) && strpos($message, 'LOCKED|') === 0) {
-        list(, $seconds) = explode('|', $message);
-        $seconds = intval($seconds);
-
-        if ($seconds > 0) {
-            $minutes = floor($seconds / 60);
-            $sec_part = $seconds % 60;
-
-            $message = sprintf(
-                _t('您的请求过于频繁，已被暂时限制。请在 <span id="countdown-timer-min">%d</span> 分钟 <span id="countdown-timer-sec">%02d</span> 秒后重试。'),
-                $minutes, $sec_part
-            );
-            $message .= "<script>
-                (function() {
-                    var seconds = {$seconds};
-                    var minElement = document.getElementById('countdown-timer-min');
-                    var secElement = document.getElementById('countdown-timer-sec');
-                    if (!minElement || !secElement) return;
-
-                    var interval = setInterval(function() {
-                        seconds--;
-                        if (seconds < 0) {
-                            clearInterval(interval);
-                            minElement.parentElement.innerHTML = '现在可以刷新页面重试了。';
-                            return;
-                        }
-                        var minutes = Math.floor(seconds / 60);
-                        var remainingSeconds = seconds % 60;
-                        minElement.textContent = minutes;
-                        secElement.textContent = remainingSeconds < 10 ? '0' + remainingSeconds : remainingSeconds;
-                    }, 1000);
-                })();
-            </script>";
-        } else {
-            $message = _t('您的请求过于频繁，请稍后重试。');
+    /**
+     * 处理 IP 解封请求 (移至 Widget 层)
+     *
+     * @param string $ip_to_unblock 待解封的IP地址
+     * @return void
+     * @throws DbException
+     */
+    private function handleUnblockIp(string $ip_to_unblock)
+    {
+        if (!$this->isValidIp($ip_to_unblock)) {
+            $this->notice->set(_t('IP地址格式不正确。'), 'error');
+            return;
         }
+
+        $update = $this->db->update($this->db->getPrefix() . 'passport_fails')
+                     ->rows(['locked_until' => 0])
+                     ->where('ip = ?', $ip_to_unblock);
+        $this->db->query($update);
+
+        $this->notice->set(_t('IP地址 %s 已成功解封。', htmlspecialchars($ip_to_unblock)), 'success');
     }
 
-    $this->notice->set($message, $type);
-}
+    /**
+     * [新增] 内部通知处理方法
+     * - 统一处理所有通知，并能根据特定消息格式生成倒计时。
+     * @param string|array $message 消息内容
+     * @param string $type          消息类型 (error, success, notice)
+     */
+    private function _setNotice($message, $type)
+    {
+        // 若消息是数组，尝试转为字符串
+        if (is_array($message)) {
+            $message = reset($message);
+            if (!is_string($message)) {
+                $message = json_encode($message, JSON_UNESCAPED_UNICODE);
+            }
+        }
+
+        // 检查是否为锁定的特殊消息格式 'LOCKED|<seconds>'
+        if (is_string($message) && strpos($message, 'LOCKED|') === 0) {
+            list(, $seconds) = explode('|', $message);
+            $seconds = intval($seconds);
+
+            if ($seconds > 0) {
+                $minutes = floor($seconds / 60);
+                $sec_part = $seconds % 60;
+
+                $message = sprintf(
+                    _t('您的请求过于频繁，已被暂时限制。请在 <span id="countdown-timer-min">%d</span> 分钟 <span id="countdown-timer-sec">%02d</span> 秒后重试。'),
+                    $minutes, $sec_part
+                );
+                $message .= "<script>
+                    (function() {
+                        var seconds = {$seconds};
+                        var minElement = document.getElementById('countdown-timer-min');
+                        var secElement = document.getElementById('countdown-timer-sec');
+                        if (!minElement || !secElement) return;
+
+                        var interval = setInterval(function() {
+                            seconds--;
+                            if (seconds < 0) {
+                                clearInterval(interval);
+                                minElement.parentElement.innerHTML = '现在可以刷新页面重试了。';
+                                return;
+                            }
+                            var minutes = Math.floor(seconds / 60);
+                            var remainingSeconds = seconds % 60;
+                            minElement.textContent = minutes;
+                            secElement.textContent = remainingSeconds < 10 ? '0' + remainingSeconds : remainingSeconds;
+                        }, 1000);
+                    })();
+                </script>";
+            } else {
+                $message = _t('您的请求过于频繁，请稍后重试。');
+            }
+        }
+
+        $this->notice->set($message, $type);
+    }
 
 
     /**
      * [新增] 递减指定IP的尝试次数
      * - 用于处理非用户错误的失败情况（如邮件服务器配置错误）。
+     * @throws DbException
      */
     private function decrementAttemptCounter()
     {
@@ -213,7 +260,7 @@ private function _setNotice($message, $type)
                 // [安全] 防范用户枚举漏洞
                 // 无论邮箱是否存在，都假装已发送邮件。实际只在用户存在时发送。
                 if (!empty($user)) {
-                    $token = Typecho_Common::randString(64);
+                    $token = Common::randString(64);
                     $createdAt = $this->options->gmtTime;
                     $signature = $this->generateSignature($token, $user['uid'], $createdAt);
 
@@ -221,7 +268,7 @@ private function _setNotice($message, $type)
                         'token' => $token, 'uid' => $user['uid'], 'created_at' => $createdAt, 'used' => 0
                     ]));
 
-                    $resetLink = Typecho_Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index);
+                    $resetLink = Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index);
 
                     if (!$this->sendResetEmail($user, $resetLink)) {
                          error_log('Passport: 邮件发送失败，目标地址: ' . $user['mail']);
@@ -306,7 +353,7 @@ private function _setNotice($message, $type)
 
                 // 步骤5: 更新密码
                 $hasher = new PasswordHash(8, true);
-                $password = $hasher->HashPassword($this->request->password);
+                $password = $hasher->hashPassword($this->request->password);
                 $this->db->query($this->db->update('table.users')->rows(['password' => $password])->where('uid = ?', $tokenRecord['uid']));
                 $this->db->query($this->db->update('table.password_reset_tokens')->rows(['used' => 1])->where('token = ?', urldecode($token)));
 
@@ -326,7 +373,8 @@ private function _setNotice($message, $type)
      * @param string $password 待验证的密码
      * @return bool|string 验证通过返回 true，否则返回错误信息
      */
-    private function validatePasswordComplexity($password) {
+    private function validatePasswordComplexity(string $password): bool|string
+    {
         $errors = [];
         if (strlen($password) < 8) {
             $errors[] = _t('密码长度不能少于8位');
@@ -354,7 +402,7 @@ private function _setNotice($message, $type)
      * [重构] 统一的人机验证处理函数
      * @return bool 验证是否通过
      */
-    private function verifyCaptcha()
+    private function verifyCaptcha(): bool
     {
         $captchaType = $this->config->captchaType;
         if ($captchaType === 'none') return true;
@@ -387,8 +435,12 @@ private function _setNotice($message, $type)
 
     /**
      * [安全] 生成 HMAC-SHA256 签名
+     * @param string $token
+     * @param int $uid
+     * @param int $createdAt
+     * @return string
      */
-    private function generateSignature($token, $uid, $createdAt)
+    private function generateSignature(string $token, int $uid, int $createdAt): string
     {
         // 如果未配置密钥，直接返回空字符串，让验证失败
         if (empty($this->config->secretKey)) {
@@ -400,8 +452,13 @@ private function _setNotice($message, $type)
 
     /**
      * [安全] 验证 HMAC-SHA256 签名
+     * @param string $token
+     * @param int $uid
+     * @param int $createdAt
+     * @param string $signature
+     * @return bool
      */
-    private function verifySignature($token, $uid, $createdAt, $signature)
+    private function verifySignature(string $token, int $uid, int $createdAt, string $signature): bool
     {
         // [安全] 如果未配置密钥，验证必须失败 (Fail-Closed)
         if (empty($this->config->secretKey)) {
@@ -415,6 +472,7 @@ private function _setNotice($message, $type)
 
     /**
      * 清理过期或已使用的令牌
+     * @throws DbException
      */
     private function cleanTokens()
     {
@@ -424,19 +482,35 @@ private function _setNotice($message, $type)
     }
 
     /**
-     * 校验人机验证的系统状态
+     * 校验人机验证的系统状态 (reCAPTCHA)
+     * @param string $response
+     * @param string $secretKey
+     * @return bool
      */
-    private function verifyRecaptcha($response, $secretKey)
+    private function verifyRecaptcha(string $response, string $secretKey): bool
     {
         return $this->verifyCaptchaService('https://www.recaptcha.net/recaptcha/api/siteverify', $response, $secretKey);
     }
 
-    private function verifyHcaptcha($response, $secretKey)
+    /**
+     * 校验人机验证的系统状态 (hCaptcha)
+     * @param string $response
+     * @param string $secretKey
+     * @return bool
+     */
+    private function verifyHcaptcha(string $response, string $secretKey): bool
     {
         return $this->verifyCaptchaService('https://hcaptcha.com/siteverify', $response, $secretKey);
     }
 
-    private function verifyCaptchaService($url, $response, $secretKey)
+    /**
+     * 通用 CAPTCHA 服务验证
+     * @param string $url
+     * @param string $response
+     * @param string $secretKey
+     * @return bool
+     */
+    private function verifyCaptchaService(string $url, string $response, string $secretKey): bool
     {
         if (empty($response)) return false;
         $result_json = $this->send_post($url, ['secret' => $secretKey, 'response' => $response]);
@@ -448,7 +522,15 @@ private function _setNotice($message, $type)
         return isset($result['success']) && $result['success'];
     }
 
-    private function verifyGeetest($lot_number, $captcha_output, $pass_token, $gen_time)
+    /**
+     * 校验人机验证的系统状态 (Geetest)
+     * @param string $lot_number
+     * @param string $captcha_output
+     * @param string $pass_token
+     * @param string $gen_time
+     * @return bool
+     */
+    private function verifyGeetest(string $lot_number, string $captcha_output, string $pass_token, string $gen_time): bool
     {
         if (empty($lot_number) || empty($captcha_output) || empty($pass_token) || empty($gen_time)) {
             return false;
@@ -473,8 +555,11 @@ private function _setNotice($message, $type)
 
     /**
      * 发送重置密码的邮件
+     * @param array $user
+     * @param string $url
+     * @return bool
      */
-    private function sendResetEmail($user, $url)
+    private function sendResetEmail(array $user, string $url): bool
     {
         $mail = new PHPMailer(true);
         try {
@@ -486,14 +571,14 @@ private function _setNotice($message, $type)
             $mail->SMTPAuth = true;
             $mail->Username = $this->config->username;
             $mail->Password = $this->config->password;
-            $mail->Port = $this->config->port;
+            $mail->Port = (int)$this->config->port;
 
             $mail->setFrom($this->config->username, $this->options->title);
             $mail->addAddress($user['mail'], $user['name']);
 
             $emailBody = str_replace(
                 ['{username}', '{sitename}', '{requestTime}', '{resetLink}'],
-                [$user['name'], Helper::options()->title, date('Y-m-d H:i:s'), $url],
+                [htmlspecialchars($user['name']), htmlspecialchars(Helper::options()->title), date('Y-m-d H:i:s'), htmlspecialchars($url)],
                 $this->config->emailTemplate
             );
 
@@ -511,8 +596,9 @@ private function _setNotice($message, $type)
 
     /**
      * 申请重置密码表格
+     * @return Typecho_Widget_Helper_Form
      */
-    public function forgotForm()
+    public function forgotForm(): Typecho_Widget_Helper_Form
     {
         $form = new Typecho_Widget_Helper_Form(NULL, Typecho_Widget_Helper_Form::POST_METHOD);
         $mail = new Typecho_Widget_Helper_Form_Element_Text('mail', NULL, NULL, _t('邮箱'), _t('请输入您忘记密码的账号所对应的邮箱地址'));
@@ -529,8 +615,9 @@ private function _setNotice($message, $type)
 
     /**
      * 设置新的密码表格
+     * @return Typecho_Widget_Helper_Form
      */
-    public function resetForm()
+    public function resetForm(): Typecho_Widget_Helper_Form
     {
         $form = new Typecho_Widget_Helper_Form(NULL, Typecho_Widget_Helper_Form::POST_METHOD);
         $password = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, NULL, _t('新密码'), _t('建议使用特殊字符与字母、数字的混编样式,以增加系统安全性.'));
@@ -545,15 +632,17 @@ private function _setNotice($message, $type)
         $submit->input->setAttribute('class', 'btn primary');
         $form->addItem($submit);
         $password->addRule('required', _t('必须填写密码'));
-        // [移除] 仅保留'required'规则，详细的复杂度检查由 validatePasswordComplexity 方法处理
         $confirm->addRule('confirm', _t('两次输入的密码不一致'), 'password');
         return $form;
     }
 
     /**
      * 向人机验证平台发送 POST 请求的方法
+     * @param string $url
+     * @param array $post_data
+     * @return string|false
      */
-    private function send_post($url, $post_data)
+    private function send_post(string $url, array $post_data): string|false
     {
         $postdata = http_build_query($post_data);
         $options = ['http' => [
@@ -563,6 +652,18 @@ private function _setNotice($message, $type)
             'timeout' => 20
         ]];
         $context = stream_context_create($options);
+        // Suppress warning if connection fails
         return @file_get_contents($url, false, $context);
+    }
+
+    /**
+     * 验证IP地址的有效性
+     *
+     * @param string $ip IP地址
+     * @return bool 是否有效
+     */
+    private static function isValidIp(string $ip): bool
+    {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6);
     }
 }
