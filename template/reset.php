@@ -1,22 +1,30 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php
+/**
+ * 重置密码页面模板
+ */
 // 导入公共变量和初始化
 include 'common.php';
 
-$menu->title = _t('重置密码');
-$options = $this->options;
-$captchaType = $this->config->captchaType;
-$recaptchaSiteKey = htmlspecialchars($this->config->sitekeyRecaptcha ?? '');
-$hcaptchaSiteKey = htmlspecialchars($this->config->sitekeyHcaptcha ?? '');
-$geetestCaptchaId = htmlspecialchars($this->config->captchaIdGeetest ?? '');
+/** @var \Widget\Options $options */
+/** @var \Widget\Menu $menu */
+
+$menu->title = _t('重置密码'); // 设置页面标题
+
+// 从配置中安全获取 CAPTCHA 相关的变量，并进行 HTML 转义
+$captchaType = htmlspecialchars((string) ($this->config->captchaType ?? 'none'));
+$recaptchaSiteKey = htmlspecialchars((string) ($this->config->sitekeyRecaptcha ?? ''));
+$hcaptchaSiteKey = htmlspecialchars((string) ($this->config->sitekeyHcaptcha ?? ''));
+$geetestCaptchaId = htmlspecialchars((string) ($this->config->captchaIdGeetest ?? ''));
 
 // 从 Request 中安全获取 token 和 signature
-$token = htmlspecialchars($this->request->token ?? '');
-$signature = htmlspecialchars($this->request->signature ?? '');
+$token = htmlspecialchars((string) ($this->request->token ?? ''));
+$signature = htmlspecialchars((string) ($this->request->signature ?? ''));
 
 include 'header.php';
 ?>
     <style>
+        /* 保持与后台登录页风格一致 */
         body {
             font-family: "Microsoft YaHei", tahoma, arial, 'Hiragino Sans GB', '\5b8b\4f53', sans-serif;
         }
@@ -33,7 +41,8 @@ include 'header.php';
             font-size: 20px;
             text-align: center;
         }
-        label:after {
+        /* 恢复原始的必填星号样式 */
+        label.required:after {
             content: " *";
             color: #ed1c24;
         }
@@ -44,9 +53,9 @@ include 'header.php';
             font-size: 18px;
             line-height: 1.33;
         }
-        /* Style for captcha container for consistent alignment */
         .captcha-container {
             margin-bottom: 15px;
+            display: flex;
         }
     </style>
     <div class="body container">
@@ -58,18 +67,18 @@ include 'header.php';
             <div class="col-mb-12 col-tb-6 col-tb-offset-3 typecho-content-panel">
                 <div class="typecho-table-wrap">
                     <div class="typecho-page-title">
-                        <h2>重置密码</h2>
+                        <h2><?php _e('重置密码'); ?></h2>
                     </div>
                     <?php $this->notice->render(); ?>
                     <form action="<?php $options->doReset(); ?>?token=<?php echo $token; ?>&signature=<?php echo $signature; ?>" method="post" enctype="application/x-www-form-urlencoded">
                         <ul class="typecho-option" id="typecho-option-item-password-0"><li>
-                                <label class="typecho-label" for="password-0-1">新密码</label>
-                                <input id="password-0-1" name="password" type="password" class="w-100">
-                                <p class="description">建议使用特殊字符与字母、数字的混编样式,以增加系统安全性.</p></li></ul>
+                                <label class="typecho-label required" for="password-0-1"><?php _e('新密码'); ?></label>
+                                <input id="password-0-1" name="password" type="password" class="w-100" required>
+                                <p class="description"><?php _e('建议使用特殊字符与字母、数字的混编样式,以增加系统安全性.'); ?></p></li></ul>
                         <ul class="typecho-option" id="typecho-option-item-confirm-1"><li>
-                                <label class="typecho-label" for="confirm-0-2">密码确认</label>
-                                <input id="confirm-0-2" name="confirm" type="password" class="w-100">
-                                <p class="description">请确认你的密码, 与上面输入的密码保持一致.</p></li></ul>
+                                <label class="typecho-label required" for="confirm-0-2"><?php _e('密码确认'); ?></label>
+                                <input id="confirm-0-2" name="confirm" type="password" class="w-100" required>
+                                <p class="description"><?php _e('请确认你的密码, 与上面输入的密码保持一致.'); ?></p></li></ul>
                         <ul class="typecho-option" id="typecho-option-item-do-2" style="display:none"><li>
                                 <input name="do" type="hidden" value="password"></li></ul>
 
@@ -93,7 +102,7 @@ include 'header.php';
                         <?php endif; ?>
 
                         <ul class="typecho-option typecho-option-submit" id="typecho-option-item-submit-3"><li>
-                                <button type="submit" class="btn primary">更新密码</button></li></ul>
+                                <button type="submit" class="btn primary"><?php _e('更新密码'); ?></button></li></ul>
                     </form>
 
                     <p class="more-link">
@@ -126,10 +135,10 @@ include __ADMIN_DIR__ . '/common-js.php';
             const captchaElement = document.getElementById('captcha-geetest');
             if (captchaElement) {
                 initGeetest4({
-                    // 确保 captchaId 变量被正确过滤
+                    // 确保 captchaId 变量被安全转义
                     captchaId: '<?php echo $geetestCaptchaId; ?>',
                     product: 'popup', // 使用弹出式
-                    lang: 'zho' // 设置语言为中文
+                    language: 'zh-cn' // 设置语言
                 }, function (captcha) {
                     // captcha为验证码实例
                     captcha.appendTo(captchaElement); // 将验证码插入到指定元素

@@ -1,18 +1,26 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
 <?php
+/**
+ * 忘记密码页面模板
+ */
 // 导入公共变量和初始化
 include 'common.php';
 
-$menu->title = _t('找回密码');
-$options = $this->options;
-$captchaType = $this->config->captchaType;
-$recaptchaSiteKey = htmlspecialchars($this->config->sitekeyRecaptcha ?? '');
-$hcaptchaSiteKey = htmlspecialchars($this->config->sitekeyHcaptcha ?? '');
-$geetestCaptchaId = htmlspecialchars($this->config->captchaIdGeetest ?? '');
+/** @var \Widget\Options $options */
+/** @var \Widget\Menu $menu */
+
+$menu->title = _t('找回密码'); // 设置页面标题
+
+// 从配置中安全获取 CAPTCHA 相关的变量，并进行 HTML 转义
+$captchaType = htmlspecialchars((string) ($this->config->captchaType ?? 'none'));
+$recaptchaSiteKey = htmlspecialchars((string) ($this->config->sitekeyRecaptcha ?? ''));
+$hcaptchaSiteKey = htmlspecialchars((string) ($this->config->sitekeyHcaptcha ?? ''));
+$geetestCaptchaId = htmlspecialchars((string) ($this->config->captchaIdGeetest ?? ''));
 
 include 'header.php';
 ?>
     <style>
+        /* 保持与后台登录页风格一致 */
         body {
             font-family: "Microsoft YaHei", tahoma, arial, 'Hiragino Sans GB', '\5b8b\4f53', sans-serif;
         }
@@ -29,7 +37,8 @@ include 'header.php';
             font-size: 20px;
             text-align: center;
         }
-        label:after {
+        /* 恢复原始的必填星号样式 */
+        label.required:after {
             content: " *";
             color: #ed1c24;
         }
@@ -40,9 +49,9 @@ include 'header.php';
             font-size: 18px;
             line-height: 1.33;
         }
-        /* Style for captcha container for consistent alignment */
         .captcha-container {
             margin-bottom: 15px;
+            display: flex;
         }
     </style>
     <div class="body container">
@@ -54,15 +63,15 @@ include 'header.php';
             <div class="col-mb-12 col-tb-6 col-tb-offset-3 typecho-content-panel">
                 <div class="typecho-table-wrap">
                     <div class="typecho-page-title">
-                        <h2>找回密码</h2>
+                        <h2><?php _e('找回密码'); ?></h2>
                     </div>
                     <?php $this->notice->render(); ?>
                     <form action="<?php $options->doForgot(); ?>" method="post" enctype="application/x-www-form-urlencoded">
                         <ul class="typecho-option" id="typecho-option-item-mail-0">
                             <li>
-                                <label class="typecho-label" for="mail-0-1">邮箱</label>
-                                <input id="mail-0-1" name="mail" type="text" class="text">
-                                <p class="description">请输入您忘记密码的账号所对应的邮箱地址</p>
+                                <label class="typecho-label required" for="mail-0-1"><?php _e('邮箱'); ?></label>
+                                <input id="mail-0-1" name="mail" type="text" class="text" required>
+                                <p class="description"><?php _e('请输入您忘记密码的账号所对应的邮箱地址'); ?></p>
                             </li>
                         </ul>
                         <ul class="typecho-option" id="typecho-option-item-do-1" style="display:none"><li><input name="do" type="hidden" value="mail"></li></ul>
@@ -86,7 +95,7 @@ include 'header.php';
                             <input type="hidden" name="gen_time" id="gen_time">
                         <?php endif; ?>
 
-                        <ul class="typecho-option typecho-option-submit" id="typecho-option-item-submit-2"><li><button type="submit" class="btn primary">提交</button></li></ul>
+                        <ul class="typecho-option typecho-option-submit" id="typecho-option-item-submit-2"><li><button type="submit" class="btn primary"><?php _e('提交'); ?></button></li></ul>
                     </form>
 
                     <p class="more-link">
@@ -119,10 +128,10 @@ include __ADMIN_DIR__ . '/common-js.php';
             const captchaElement = document.getElementById('captcha-geetest');
             if (captchaElement) {
                 initGeetest4({
-                    // 确保 captchaId 变量被正确过滤
+                    // 确保 captchaId 变量被安全转义
                     captchaId: '<?php echo $geetestCaptchaId; ?>',
                     product: 'popup', // 使用弹出式
-                    lang: 'zho' // 设置语言为中文
+                    language: 'zh-cn' // 设置语言
                 }, function (captcha) {
                     // captcha为验证码实例
                     captcha.appendTo(captchaElement); // 将验证码插入到指定元素
