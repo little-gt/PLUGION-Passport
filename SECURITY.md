@@ -6,14 +6,13 @@
 
 ## 📌 Supported Versions
 
-我强烈建议所有用户使用最新版本，对于 0.1.1-pre 之后的版本都是可以直接覆盖更新的。目前插件已经稳定并且没有重大更新的计划，您可以放心地下载最新且最稳定的 0.1.2-fix 版本使用。
+我强烈建议所有用户使用最新版本，对于 0.1.1-pre 之后的版本都是可以直接覆盖更新的。目前插件已经稳定并且没有重大更新的计划，您可以放心地下载最新且最稳定的 0.1.3 版本使用。
 
 | Version | Status |
 | :------ | :----- |
-| **0.1.2-fix** | ✅ Latest     |
-| 0.1.2         | 🟡 Inaccurate |
-| 0.1.1-pre     | 🟡 Inaccurate |
-| < 0.1.1-pre   | ❌ Out of Scope |
+| **0.1.3**     | ✅ Latest       |
+| 0.1.2-fix     | 🟡 Inaccurate   |
+| < 0.1.2-fix   | ❌ Out of Scope |
 
 ---
 
@@ -111,9 +110,23 @@
 
 ---
 
-## 🚨 v0.1.2-fix 规范化修复说明
+## 🚨 v0.1.3 安全与功能增强说明
 
-因为注意到了 fork 版本当中提出的潜在的不规范问题，我对 0.1.2 正式版本进行了加固。建议使用 0.1.2-fix 版本。当然使用其他收到支持的版本也是可以的，这些问题都是 AI 根据最新的严格规范得出的，即使不修复也不存在严重的安全风险，只是不推荐而已，因为利用的成本还是很高的。
+在 **v0.1.3** 版本中，我们重点解决了特定网络环境下的安全策略失效问题，并引入了更可控的验证机制。
+
+| 编号 | 级别 | 问题简述 | 优化方案 |
+|------|---------|----------|----------|
+| S-01 | 🟢 增强 | CDN/反代环境下 IP 限流误判或失效 | 引入 **IP 获取策略**配置。支持从 `HTTP_X_FORWARDED_FOR` 或自定义 Header 获取真实 IP，防止绕过速率限制。 |
+| S-02 | 🟢 增强 | 验证码可能存在的重放攻击 | 内置验证码采用 **Verify-and-Destroy** 机制。验证通过后立即销毁 Session 中的 Token，防止同一验证码被重复利用。 |
+| S-03 | 🟢 增强 | 缺乏默认的防机器人的机制 | 取消无人机验证码的配置，默认启用本地 GD 库生成的图片验证码。 |
+
+---
+
+## 🗒️ 历史版本修复记录
+
+以下记录保留供历史查阅，建议所有用户升级至 v0.1.3。
+
+###  v0.1.2-fix
 
 | 编号 | 级别 | 问题简述 | 修复方案 |
 |------|---------|----------|----------|
@@ -122,38 +135,6 @@
 | P0-3 | 🔴 不规范 | 邮件模板变量缺乏过滤，导致**存储型 XSS** | 对所有邮件模板占位符内容进行 **`htmlspecialchars()`** 转义。|
 | P1-4 | 🟡 不建议 | HMAC 密钥生成回退逻辑不安全 | 移除不安全的 `mt_rand` 回退，确保只有安全的随机源被用于 HMAC 密钥。|
 | P1-5 | 🟡 不建议 | 后台 IP 解封操作缺乏 **CSRF 保护** | 在后台解封表单中添加了 **Typecho CSRF Token** 验证。|
-
-### 详细代码实现中的修复点：
-
-#### 1. 弱随机数修复 (P0-1 & P1-4)
-
-在 `Passport_Plugin::generateStrongRandomKey` (用于 HMAC 密钥) 和 `Passport_Widget::doForgot` (用于重置令牌) 中，移除了依赖 `mt_rand` 的弱随机数生成逻辑，确保了密码学安全。
-
-#### 2. 安全通讯协议修复 (P0-2 & HTTP 客户端)
-
-在 `Passport_Widget` 类中：
-- 统一使用 `\Typecho\Http\Client` 替代不安全的 `@file_get_contents`。
-- 确保 Geetest 的 URL 强制使用 **`https://`**。
-
-#### 3. 邮件模板 XSS 修复 (P0-3)
-
-在 `Passport_Widget::sendResetEmail` 方法中，对所有传入 `str_replace` 的 `$emailBody` 变量值使用了 `htmlspecialchars()` 进行转义：
-
-```php
-$emailBody = str_replace(
-    ['{username}', '{sitename}', '{requestTime}', '{resetLink}'],
-    [
-        htmlspecialchars($user['name'], ENT_QUOTES, 'UTF-8'),
-        // ... (其他变量同样被转义)
-        htmlspecialchars($url, ENT_QUOTES, 'UTF-8')
-    ],
-    // ...
-);
-```
-
-#### 4. CSRF 保护修复 (P1-5)
-
-在 `Passport_Widget::handleUnblockIp` 方法中，加入了对 Typecho CSRF token 的验证。
 
 ---
 

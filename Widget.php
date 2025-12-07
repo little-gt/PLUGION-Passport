@@ -4,17 +4,21 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 /**
  * 找回密码核心逻辑类 - Passport
  *
+ * 负责处理前端路由请求、验证码生成与校验、邮件发送、
+ * IP 速率限制及数据交互逻辑。
+ *
  * @package Passport
+ * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM & 小否先生
- * @version 0.1.2-fix
+ * @version 0.1.3
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
 
-// PHPMailer 库文件依赖
-require_once 'PHPMailer/Exception.php';
-require_once 'PHPMailer/PHPMailer.php';
-require_once 'PHPMailer/SMTP.php';
+// 引入 PHPMailer 依赖
+require_once 'PHPMailer/src/Exception.php';
+require_once 'PHPMailer/src/PHPMailer.php';
+require_once 'PHPMailer/src/SMTP.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
@@ -30,11 +34,33 @@ use Widget\Notice;
 
 class Passport_Widget extends Widget implements ActionInterface
 {
+    /**
+     * @var Widget_Options Typecho 配置组件
+     */
     private $options;
+
+    /**
+     * @var mixed 插件私有配置
+     */
     private $config;
+
+    /**
+     * @var Notice 通知组件
+     */
     private $notice;
+
+    /**
+     * @var Typecho_Db 数据库实例
+     */
     private $db;
 
+    /**
+     * 构造函数
+     *
+     * @param mixed $request
+     * @param mixed $response
+     * @param mixed $params
+     */
     public function __construct($request, $response, $params = NULL)
     {
         parent::__construct($request, $response, $params);
@@ -45,19 +71,18 @@ class Passport_Widget extends Widget implements ActionInterface
     }
 
     /**
-     * [核心] 插件路由动作入口
+     * [Action 接口实现] 处理后台动作
+     * 目前用于后台手动解封 IP
      *
-     * 处理后台 IP 解封请求
      * @return void
      * @throws DbException
      */
     public function action()
     {
-        // 检查用户是否为管理员
+        // 鉴权：仅管理员可操作
         $this->user->pass('administrator');
         $this->security->protect();
 
-        // 处理 IP 解封请求
         if ($this->request->isPost() && !empty($this->request->unblock_ip)) {
             $this->handleUnblockIp((string) $this->request->unblock_ip);
         }
@@ -66,164 +91,391 @@ class Passport_Widget extends Widget implements ActionInterface
     }
 
     /**
-     * 处理 IP 解封请求
+     * [验证码] 生成并输出内置验证码图片
      *
-     * @param string $ip_to_unblock 待解封的IP地址
+     * 路由: /passport/captcha
+     * 使用 PHP GD 库生成，直接输出 PNG 图片流并终止脚本。
+     *
      * @return void
-     * @throws DbException
      */
-    private function handleUnblockIp(string $ip_to_unblock)
+    public function renderCaptcha()
     {
-        if (!$this->isValidIp($ip_to_unblock)) {
-            $this->notice->set(_t('IP地址格式不正确。'), 'error');
-            return;
+        // 确保 Session 开启以存储验证码
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
         }
 
-        // 更新数据库，设置锁定时间为 0
-        $update = $this->db->update($this->db->getPrefix() . 'passport_fails')
-                     ->rows(['locked_until' => 0])
-                     ->where('ip = ?', $ip_to_unblock);
-        $this->db->query($update);
+        $width = 120;
+        $height = 40;
+        $image = imagecreatetruecolor($width, $height);
 
-        $this->notice->set(_t('IP地址 %s 已成功解封。', htmlspecialchars($ip_to_unblock)), 'success');
+        // 背景填充
+        $bgColor = imagecolorallocate($image, 255, 255, 255);
+        imagefill($image, 0, 0, $bgColor);
+
+        // 生成随机字符 (去除易混淆字符)
+        $charset = '23456789abcdefghkmnpqrstuvwxyzABCDEFGHKMNPQRSTUVWXYZ';
+        $code = '';
+        for ($i = 0; $i < 4; $i++) {
+            $code .= $charset[mt_rand(0, strlen($charset) - 1)];
+        }
+
+        // 存入 Session (小写存储，不区分大小写)
+        $_SESSION['passport_captcha_code'] = strtolower($code);
+
+        // 添加干扰点
+        for ($i = 0; $i < 100; $i++) {
+            $pointColor = imagecolorallocate($image, mt_rand(50, 200), mt_rand(50, 200), mt_rand(50, 200));
+            imagesetpixel($image, mt_rand(1, $width - 1), mt_rand(1, $height - 1), $pointColor);
+        }
+
+        // 添加干扰线
+        for ($i = 0; $i < 3; $i++) {
+            $lineColor = imagecolorallocate($image, mt_rand(80, 220), mt_rand(80, 220), mt_rand(80, 220));
+            imageline($image, mt_rand(1, $width - 1), mt_rand(1, $height - 1), mt_rand(1, $width - 1), mt_rand(1, $height - 1), $lineColor);
+        }
+
+        // 写入文字 (分散排列，位置随机波动)
+        for ($i = 0; $i < strlen($code); $i++) {
+            $textColor = imagecolorallocate($image, mt_rand(0, 100), mt_rand(0, 150), mt_rand(0, 200));
+            $x = ($i * 120 / 4) + mt_rand(5, 10);
+            $y = mt_rand(5, 20);
+            imagechar($image, 5, $x, $y, $code[$i], $textColor);
+        }
+
+        // 输出图片头和内容
+        header('Content-Type: image/png');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        imagepng($image);
+        imagedestroy($image);
+        exit; // 终止后续输出
     }
 
     /**
-     * 统一通知处理方法
-     * - 统一处理所有通知，并能根据特定消息格式生成倒计时。
+     * [页面逻辑] 忘记密码处理
+     */
+    public function doForgot()
+    {
+        // 导入模板
+        require_once 'template/forgot.php';
+
+        // 清理数据库中的过期令牌
+        $this->cleanTokens();
+
+        if ($this->request->isPost()) {
+            try {
+                // 1. 速率限制检查
+                $this->handleRateLimiting();
+
+                // 2. 表单验证
+                if ($error = $this->forgotForm()->validate()) {
+                    $this->pushNotice($error, 'error');
+                    return;
+                }
+
+                // 3. 人机验证
+                if (!$this->verifyCaptcha()) {
+                    $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
+                    return;
+                }
+
+                // 4. 业务逻辑：查找用户并发送邮件
+                $mail = $this->request->filter('trim')->mail;
+                $user = $this->db->fetchRow($this->db->select()->from('table.users')->where('mail = ?', $mail));
+
+                $mailSentSuccessfully = true;
+
+                // 防范用户枚举：无论用户是否存在，表面流程一致
+                if (!empty($user)) {
+                    $token = Common::randString(64);
+                    $createdAt = $this->options->gmtTime;
+                    // 生成带签名的安全链接
+                    $signature = $this->generateSignature($token, (int)$user['uid'], $createdAt);
+
+                    $this->db->query($this->db->insert('table.password_reset_tokens')->rows([
+                        'token' => $token, 
+                        'uid' => $user['uid'], 
+                        'created_at' => $createdAt, 
+                        'used' => 0
+                    ]));
+
+                    $resetLink = Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index);
+
+                    if (!$this->sendResetEmail($user, $resetLink)) {
+                         error_log('Passport: Email send failed to: ' . $user['mail']);
+                         $mailSentSuccessfully = false;
+                    }
+                }
+
+                if ($mailSentSuccessfully) {
+                    $this->pushNotice(_t('如果您的邮箱在系统中存在，一封包含重置链接的邮件已发送，请查收。'), 'success');
+                } else {
+                    // 发送失败属于系统问题，不计入用户的错误尝试次数
+                    $this->decrementAttemptCounter();
+                    $this->pushNotice(_t('邮件发送服务暂不可用，请联系管理员。'), 'error');
+                }
+
+            } catch (WidgetException $e) {
+                // 捕获速率限制抛出的特定异常码 429
+                if ($e->getCode() === 429) {
+                    $this->pushRateLimitNotice((int) $e->getMessage());
+                } else {
+                    $this->pushNotice($e->getMessage(), 'error');
+                }
+            }
+        }
+    }
+
+    /**
+     * [页面逻辑] 重置密码处理
+     */
+    public function doReset()
+    {
+        require_once 'template/reset.php';
+        $this->cleanTokens();
+
+        // 获取参数
+        $token = $this->request->filter('strip_tags', 'trim')->token;
+        $signature = $this->request->filter('strip_tags', 'trim')->signature;
+
+        // 基础参数校验
+        if (empty($token) || empty($signature)) {
+            $this->pushNotice(_t('无效的重置链接'), 'notice');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
+
+        // 令牌查询
+        $tokenRecord = $this->db->fetchRow($this->db->select()->from('table.password_reset_tokens')
+            ->where('token = ? AND used = ?', $token, 0));
+
+        // 令牌有效性检查 (过期时间: 1小时)
+        if (empty($tokenRecord) || ($this->options->gmtTime - $tokenRecord['created_at']) > 3600) {
+            $this->pushNotice(_t('链接已失效或已使用，请重新申请。'), 'notice');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
+
+        // 签名安全校验
+        if (!$this->verifySignature($token, (int)$tokenRecord['uid'], (int)$tokenRecord['created_at'], $signature)) {
+            $this->pushNotice(_t('安全签名验证失败，链接非法。'), 'error');
+            $this->response->redirect($this->options->loginUrl);
+            return;
+        }
+
+        if ($this->request->isPost()) {
+             try {
+                // 1. 速率限制
+                $this->handleRateLimiting();
+
+                // 2. 表单校验
+                if ($error = $this->resetForm()->validate()) {
+                    $this->pushNotice($error, 'error');
+                    return;
+                }
+
+                // 3. 密码复杂度校验
+                $password = (string) $this->request->password;
+                $complexityCheck = $this->validatePasswordComplexity($password);
+                if ($complexityCheck !== true) {
+                    $this->pushNotice($complexityCheck, 'error');
+                    return;
+                }
+
+                // 4. 人机验证
+                if (!$this->verifyCaptcha()) {
+                    $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
+                    return;
+                }
+
+                // 5. 执行重置
+                $hasher = new PasswordHash(8, true);
+                $passwordHash = $hasher->hashPassword($password);
+                
+                // 更新用户密码
+                $this->db->query($this->db->update('table.users')
+                    ->rows(['password' => $passwordHash])
+                    ->where('uid = ?', $tokenRecord['uid']));
+                
+                // 标记令牌已用
+                $this->db->query($this->db->update('table.password_reset_tokens')
+                    ->rows(['used' => 1])
+                    ->where('token = ?', $token));
+
+                $this->pushNotice(_t('密码重置成功，请使用新密码登录。'), 'success');
+                $this->response->redirect($this->options->loginUrl);
+
+            } catch (WidgetException $e) {
+                if ($e->getCode() === 429) {
+                    $this->pushRateLimitNotice((int) $e->getMessage());
+                } else {
+                    $this->pushNotice($e->getMessage(), 'error');
+                }
+            }
+        }
+    }
+
+    /**
+     * 统一的通知推送方法
+     * 替代原有的 _setNotice，参数更加规范。
+     *
      * @param string|array $message 消息内容
      * @param string $type 消息类型 (error, success, notice)
      */
-    private function _setNotice($message, $type)
+    private function pushNotice($message, string $type = 'notice')
     {
-        // 若消息是数组，尝试转为字符串
+        // 处理数组形式的错误消息（如表单验证返回的数组）
         if (is_array($message)) {
-            $message = reset($message);
-            if (!is_string($message)) {
-                $message = json_encode($message, JSON_UNESCAPED_UNICODE);
-            }
+            $message = reset($message); // 取第一条
         }
-
-        // 检查是否为锁定的特殊消息格式 'LOCKED|<seconds>'
-        if (is_string($message) && strpos($message, 'LOCKED|') === 0) {
-            list(, $seconds) = explode('|', $message);
-            $seconds = intval($seconds);
-
-            if ($seconds > 0) {
-                $minutes = floor($seconds / 60);
-                $sec_part = $seconds % 60;
-
-                $message = sprintf(
-                    _t('您的请求过于频繁，已被暂时限制。请在 <span id="countdown-timer-min">%d</span> 分钟 <span id="countdown-timer-sec">%02d</span> 秒后重试。'),
-                    $minutes, $sec_part
-                );
-                // 嵌入倒计时 JavaScript
-                $message .= "<script>
-                    (function() {
-                        var seconds = {$seconds};
-                        var minElement = document.getElementById('countdown-timer-min');
-                        var secElement = document.getElementById('countdown-timer-sec');
-                        if (!minElement || !secElement) return;
-
-                        var interval = setInterval(function() {
-                            seconds--;
-                            if (seconds < 0) {
-                                clearInterval(interval);
-                                minElement.parentElement.innerHTML = '" . _t('现在可以刷新页面重试了。') . "';
-                                return;
-                            }
-                            var minutes = Math.floor(seconds / 60);
-                            var remainingSeconds = seconds % 60;
-                            minElement.textContent = minutes;
-                            secElement.textContent = remainingSeconds < 10 ? '0' + remainingSeconds : remainingSeconds;
-                        }, 1000);
-                    })();
-                </script>";
-            } else {
-                $message = _t('您的请求过于频繁，请稍后重试。');
-            }
+        
+        // 确保是字符串
+        if (!is_string($message)) {
+            $message = _t('未知错误');
         }
 
         $this->notice->set($message, $type);
     }
 
-
     /**
-     * 递减指定IP的尝试次数
-     * - 用于处理非用户错误的失败情况（如邮件服务器配置错误）。
-     * @throws DbException
+     * 专门用于速率限制（封禁）的通知推送
+     * 生成带有倒计时 JS 的 HTML 提示。
+     *
+     * @param int $seconds 剩余封禁秒数
      */
-    private function decrementAttemptCounter()
+    private function pushRateLimitNotice(int $seconds)
     {
-        if (empty($this->config->enableRateLimit) || !$this->config->enableRateLimit) {
+        if ($seconds <= 0) {
+            $this->pushNotice(_t('请求过于频繁，请稍后重试。'), 'error');
             return;
         }
-        $ip = $this->request->getIp();
-        $failTable = $this->db->getPrefix() . 'passport_fails';
-        $log = $this->db->fetchRow($this->db->select()->from($failTable)->where('ip = ?', $ip));
 
-        if ($log && $log['attempts'] > 0) {
-            $this->db->query($this->db->update($failTable)
-                ->rows(['attempts' => $log['attempts'] - 1])
-                ->where('ip = ?', $ip));
-        }
+        $minutes = floor($seconds / 60);
+        $sec_part = $seconds % 60;
+
+        $msg = sprintf(
+            _t('您的请求过于频繁，已被暂时限制。请在 <span id="countdown-min">%d</span> 分 <span id="countdown-sec">%02d</span> 秒后重试。'),
+            $minutes, $sec_part
+        );
+
+        // 嵌入简单的倒计时脚本
+        $msg .= "<script>
+            (function() {
+                var s = {$seconds};
+                var mEl = document.getElementById('countdown-min');
+                var sEl = document.getElementById('countdown-sec');
+                if(!mEl || !sEl) return;
+                var timer = setInterval(function(){
+                    s--;
+                    if(s<=0){
+                        clearInterval(timer);
+                        mEl.parentNode.innerHTML = '" . _t('现在可以刷新页面重试了。') . "';
+                        return;
+                    }
+                    mEl.innerText = Math.floor(s/60);
+                    var rs = s%60;
+                    sEl.innerText = rs<10?'0'+rs:rs;
+                }, 1000);
+            })();
+        </script>";
+
+        $this->notice->set($msg, 'error');
     }
 
+    /**
+     * 智能获取客户端 IP
+     * 根据 Plugin.php 配置的策略获取 IP，支持反向代理。
+     *
+     * @return string
+     */
+    private function getClientIp(): string
+    {
+        $strategy = $this->config->ipSource ?? 'default';
+        $ip = '';
 
-    public function execute() {}
+        switch ($strategy) {
+            case 'custom':
+                // 从自定义 Header 获取
+                $header = strtoupper($this->config->customIpHeader ?? '');
+                if (!empty($header) && isset($_SERVER[$header])) {
+                    $ip = $_SERVER[$header];
+                }
+                break;
+
+            case 'proxy':
+                // 尝试标准的代理 Header
+                if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+                    // 可能包含多个IP，取第一个
+                    $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+                    $ip = trim($ips[0]);
+                } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
+                    $ip = $_SERVER['HTTP_CLIENT_IP'];
+                }
+                break;
+
+            case 'default':
+            default:
+                // 使用 Typecho 默认机制 (通常是 REMOTE_ADDR)
+                $ip = $this->request->getIp();
+                break;
+        }
+
+        // 如果上述方法都失败，回退到 request->getIp()
+        if (empty($ip)) {
+            $ip = $this->request->getIp();
+        }
+
+        // 基础清洗，防止注入
+        return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
+    }
 
     /**
-     * [核心安全功能] 处理请求速率限制与IP封禁
-     * @throws WidgetException 当IP被封禁时抛出异常
+     * [核心逻辑] 处理请求速率限制
+     * 检查 IP 记录，更新计数，若超过阈值则抛出异常。
+     *
+     * @throws WidgetException 如果被封禁，抛出异常码 429，消息为剩余秒数
      */
     private function handleRateLimiting()
     {
-        // [配置] 从插件设置读取是否启用此功能
         if (empty($this->config->enableRateLimit) || !$this->config->enableRateLimit) {
             return;
         }
 
-        $ip = $this->request->getIp();
+        $ip = $this->getClientIp(); // 使用新的 IP 获取方法
         $now = time();
         $failTable = $this->db->getPrefix() . 'passport_fails';
 
-        // 1. 查询当前IP的记录
+        // 查询记录
         $log = $this->db->fetchRow($this->db->select()->from($failTable)->where('ip = ?', $ip));
 
         if ($log) {
-            // 2. 检查IP是否仍处于封禁期
+            // 检查是否在封禁期
             if ($log['locked_until'] > $now) {
-                $remaining_time = $log['locked_until'] - $now;
-                // [抛出] 带倒计时标记的异常
-                throw new WidgetException('LOCKED|' . $remaining_time);
+                // 抛出异常，Code 429 表示 Too Many Requests
+                throw new WidgetException((string)($log['locked_until'] - $now), 429);
             }
 
-            // 3. 更新尝试次数
-            // [策略] 如果距离上次尝试超过10分钟，则重置计数器
+            // 更新计数逻辑：若距离上次尝试超过10分钟，计数重置
             $attempts = (($now - $log['last_attempt']) > 600) ? 1 : $log['attempts'] + 1;
+            
+            $updateData = ['attempts' => $attempts, 'last_attempt' => $now];
 
-            $updateData = [
-                'attempts' => $attempts,
-                'last_attempt' => $now
-            ];
-
-            // 4. 判断是否达到封禁阈值 (每间隔20次锁定一次)
+            // 阈值判定：每 20 次尝试触发封禁
             if ($attempts % 20 == 0) {
-                // [策略] 封禁时长恒定为5分钟 (300秒)
-                $lockDuration = 300;
+                $lockDuration = 300; // 封禁 5 分钟
                 $updateData['locked_until'] = $now + $lockDuration;
-
+                
                 $this->db->query($this->db->update($failTable)->rows($updateData)->where('ip = ?', $ip));
-                // [抛出] 带倒计时标记的异常
-                throw new WidgetException('LOCKED|' . $lockDuration);
-
+                
+                throw new WidgetException((string)$lockDuration, 429);
             } else {
-                // 未达到阈值，仅更新尝试次数和时间
                 $this->db->query($this->db->update($failTable)->rows($updateData)->where('ip = ?', $ip));
             }
-
         } else {
-            // 5. 如果是首次尝试，则插入新记录
+            // 首次记录
             $this->db->query($this->db->insert($failTable)->rows([
                 'ip' => $ip,
                 'attempts' => 1,
@@ -234,370 +486,258 @@ class Passport_Widget extends Widget implements ActionInterface
     }
 
     /**
-     * 忘记密码处理页面
+     * 减少尝试计数器
+     * 用于系统级错误（如邮件发送失败），避免误伤用户。
      */
-    public function doForgot()
+    private function decrementAttemptCounter()
     {
-        // 导入模板
-        require_once 'template/forgot.php';
+        if (empty($this->config->enableRateLimit) || !$this->config->enableRateLimit) {
+            return;
+        }
+        $ip = $this->getClientIp();
+        $failTable = $this->db->getPrefix() . 'passport_fails';
+        $log = $this->db->fetchRow($this->db->select()->from($failTable)->where('ip = ?', $ip));
 
-        // 清理过期的重置令牌
-        $this->cleanTokens();
-
-        if ($this->request->isPost()) {
-            try {
-                // 步骤1: 检查IP是否被封禁 (速率限制)
-                $this->handleRateLimiting();
-
-                // 步骤2: 表单基础验证
-                if ($error = $this->forgotForm()->validate()) {
-                    $this->_setNotice($error, 'error');
-                    return;
-                }
-
-                // 步骤3: 人机验证 (CAPTCHA)
-                if (!$this->verifyCaptcha()) {
-                    $this->_setNotice(_t('人机身份验证失败，请重试。'), 'error');
-                    return;
-                }
-
-                // 步骤4: 处理用户数据和发送邮件
-                // 确保输入的 mail 经过了过滤
-                $mail = $this->request->filter('trim')->mail;
-                $user = $this->db->fetchRow($this->db->select()->from('table.users')->where('mail = ?', $mail));
-
-                $mailSentSuccessfully = true;
-                // [安全] 防范用户枚举漏洞: 无论邮箱是否存在，都假装已发送邮件
-                if (!empty($user)) {
-                    $token = Common::randString(64);
-                    $createdAt = $this->options->gmtTime;
-                    $signature = $this->generateSignature($token, (int)$user['uid'], $createdAt);
-
-                    $this->db->query($this->db->insert('table.password_reset_tokens')->rows([
-                        'token' => $token, 'uid' => $user['uid'], 'created_at' => $createdAt, 'used' => 0
-                    ]));
-
-                    $resetLink = Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index);
-
-                    if (!$this->sendResetEmail($user, $resetLink)) {
-                         error_log('Passport: 邮件发送失败，目标地址: ' . $user['mail']);
-                         $mailSentSuccessfully = false;
-                    }
-                }
-
-                // [响应] 根据邮件发送结果显示不同信息
-                if ($mailSentSuccessfully) {
-                    $this->_setNotice(_t('如果您的邮箱地址在我们系统中存在，一封包含重置链接的邮件将会发送给您。请检查您的收件箱。'), 'success');
-                } else {
-                    // [新增] 邮件发送失败时，显示对用户无害的通用提示，且不计入错误尝试
-                    $this->decrementAttemptCounter();
-                    $this->_setNotice(_t('邮件发送服务暂时出现问题，请稍后重试或联系管理员。'), 'error');
-                }
-
-
-            } catch (WidgetException $e) {
-                // 使用新的通知方法处理异常
-                $this->_setNotice($e->getMessage(), 'error');
-                return;
-            }
+        if ($log && $log['attempts'] > 0) {
+            $this->db->query($this->db->update($failTable)
+                ->rows(['attempts' => $log['attempts'] - 1])
+                ->where('ip = ?', $ip));
         }
     }
 
     /**
-     * 重置密码处理页面
-     */
-    public function doReset()
-    {
-        require_once 'template/reset.php';
-        $this->cleanTokens();
-
-        // 确保 token 和 signature 经过了基础过滤
-        $token = $this->request->filter('strip_tags', 'trim')->token;
-        $signature = $this->request->filter('strip_tags', 'trim')->signature;
-
-        if (empty($token) || empty($signature)) {
-            $this->_setNotice(_t('无效的重置链接'), 'notice');
-            $this->response->redirect($this->options->loginUrl);
-            return;
-        }
-
-        // 令牌查询
-        $tokenRecord = $this->db->fetchRow($this->db->select()->from('table.password_reset_tokens')
-            ->where('token = ? AND used = ?', $token, 0));
-
-        // 验证令牌有效性、是否过期
-        if (empty($tokenRecord) || ($this->options->gmtTime - $tokenRecord['created_at']) > 3600) {
-            $this->_setNotice(_t('该链接已失效或已使用，请重新获取。'), 'notice');
-            $this->response->redirect($this->options->loginUrl);
-            return;
-        }
-
-        // [安全] 验证HMAC签名 (Fail-Closed 原则)
-        if (!$this->verifySignature($token, (int)$tokenRecord['uid'], (int)$tokenRecord['created_at'], $signature)) {
-            $this->_setNotice(_t('令牌签名验证失败，链接无效。'), 'error');
-            $this->response->redirect($this->options->loginUrl);
-            return;
-        }
-
-        if ($this->request->isPost()) {
-             try {
-                // 步骤1: 检查IP是否被封禁 (速率限制)
-                $this->handleRateLimiting();
-
-                // 步骤2: 表单基础验证
-                if ($error = $this->resetForm()->validate()) {
-                    $this->_setNotice($error, 'error');
-                    return;
-                }
-
-                // [安全] 步骤3: 新增密码复杂度验证
-                $password = (string) $this->request->password;
-                if (($complexityError = $this->validatePasswordComplexity($password)) !== true) {
-                    $this->_setNotice($complexityError, 'error');
-                    return;
-                }
-
-                // 步骤4: 人机验证 (CAPTCHA)
-                if (!$this->verifyCaptcha()) {
-                    $this->_setNotice(_t('人机身份验证失败，请重试。'), 'error');
-                    return;
-                }
-
-                // 步骤5: 更新密码
-                $hasher = new PasswordHash(8, true);
-                $passwordHash = $hasher->hashPassword($password);
-                $this->db->query($this->db->update('table.users')->rows(['password' => $passwordHash])->where('uid = ?', $tokenRecord['uid']));
-                $this->db->query($this->db->update('table.password_reset_tokens')->rows(['used' => 1])->where('token = ?', $token));
-
-                $this->_setNotice(_t('密码重置成功，请使用新密码登录。'), 'success');
-                $this->response->redirect($this->options->loginUrl);
-
-            } catch (WidgetException $e) {
-                // 使用新的通知方法处理异常
-                $this->_setNotice($e->getMessage(), 'error');
-                return;
-            }
-        }
-    }
-
-    /**
-     * [安全] 验证新密码的复杂度
-     * @param string $password 待验证的密码
-     * @return bool|string 验证通过返回 true，否则返回错误信息
-     */
-    private function validatePasswordComplexity(string $password): bool|string
-    {
-        $errors = [];
-        if (Common::strLen($password) < 8) {
-            $errors[] = _t('密码长度不能少于8位');
-        }
-        if (!preg_match('/[A-Z]/', $password)) {
-            $errors[] = _t('密码必须包含至少一个大写字母');
-        }
-        if (!preg_match('/[a-z]/', $password)) {
-            $errors[] = _t('密码必须包含至少一个小写字母');
-        }
-        if (!preg_match('/[0-9]/', $password)) {
-            $errors[] = _t('密码必须包含至少一个数字');
-        }
-        // \W 匹配非字母数字字符, 确保至少一个特殊字符
-        if (!preg_match('/[\W_]/', $password)) {
-            $errors[] = _t('密码必须包含至少一个特殊字符');
-        }
-
-        if (empty($errors)) {
-            return true;
-        }
-        return implode('；', $errors) . '。';
-    }
-
-    /**
-     * [重构] 统一的人机验证处理函数
-     * @return bool 验证是否通过
+     * [验证码] 统一的人机验证逻辑
+     * 支持 Default(内置), reCAPTCHA, hCaptcha, Geetest
+     *
+     * @return bool 验证通过返回 true
      */
     private function verifyCaptcha(): bool
     {
         $captchaType = $this->config->captchaType;
+        
+        // 理论上不允许 none，但为了兼容性保留判断
         if ($captchaType === 'none') return true;
 
-        $captchaVerified = false;
         try {
             switch ($captchaType) {
+                case 'default':
+                    return $this->verifyDefaultCaptcha();
+                
                 case 'recaptcha':
-                    if (empty($this->config->secretkeyRecaptcha)) throw new PHPMailerException(_t('reCAPTCHA配置不完整'));
-                    $captchaVerified = $this->verifyRecaptcha((string) $this->request->get('g-recaptcha-response'), (string) $this->config->secretkeyRecaptcha);
-                    break;
-                case 'hcaptcha':
-                    if (empty($this->config->secretkeyHcaptcha)) throw new PHPMailerException(_t('hCaptcha配置不完整'));
-                    $captchaVerified = $this->verifyHcaptcha((string) $this->request->get('h-captcha-response'), (string) $this->config->secretkeyHcaptcha);
-                    break;
-                case 'geetest':
-                    if (empty($this->config->captchaKeyGeetest)) throw new PHPMailerException(_t('Geetest配置不完整'));
-                    $captchaVerified = $this->verifyGeetest(
-                        (string) $this->request->get('lot_number'), (string) $this->request->get('captcha_output'),
-                        (string) $this->request->get('pass_token'), (string) $this->request->get('gen_time')
+                    if (empty($this->config->secretkeyRecaptcha)) throw new PHPMailerException(_t('reCAPTCHA 配置缺失'));
+                    return $this->verifyRecaptcha(
+                        (string) $this->request->get('g-recaptcha-response'), 
+                        (string) $this->config->secretkeyRecaptcha
                     );
-                    break;
+
+                case 'hcaptcha':
+                    if (empty($this->config->secretkeyHcaptcha)) throw new PHPMailerException(_t('hCaptcha 配置缺失'));
+                    return $this->verifyHcaptcha(
+                        (string) $this->request->get('h-captcha-response'), 
+                        (string) $this->config->secretkeyHcaptcha
+                    );
+
+                case 'geetest':
+                    if (empty($this->config->captchaKeyGeetest)) throw new PHPMailerException(_t('Geetest 配置缺失'));
+                    return $this->verifyGeetest(
+                        (string) $this->request->get('lot_number'), 
+                        (string) $this->request->get('captcha_output'),
+                        (string) $this->request->get('pass_token'), 
+                        (string) $this->request->get('gen_time')
+                    );
+                
+                default:
+                    // 默认为真，避免未知的配置导致死循环
+                    return true;
             }
         } catch (PHPMailerException $e) {
-            $this->_setNotice($e->getMessage() . _t('，请联系管理员。'), 'error');
+            $this->pushNotice($e->getMessage(), 'error');
             return false;
         }
-        return $captchaVerified;
     }
 
     /**
-     * [安全] 生成 HMAC-SHA256 签名
-     * @param string $token 令牌
-     * @param int $uid 用户ID
-     * @param int $createdAt 创建时间戳
-     * @return string
+     * [验证码] 校验内置图片验证码
+     *
+     * @return bool
+     * @throws PHPMailerException
      */
+    private function verifyDefaultCaptcha(): bool
+    {
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $inputCode = strtolower(trim($this->request->get('captcha', '')));
+        $sessionCode = $_SESSION['passport_captcha_code'] ?? '';
+
+        // 必须在校验后立即销毁 Session 中的验证码，防止重放
+        unset($_SESSION['passport_captcha_code']);
+
+        if (empty($inputCode) || empty($sessionCode)) {
+            return false;
+        }
+
+        if ($inputCode !== $sessionCode) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 后台解封 IP 的具体实现
+     *
+     * @param string $ip
+     */
+    private function handleUnblockIp(string $ip)
+    {
+        if (!$this->isValidIp($ip)) {
+            $this->notice->set(_t('IP 地址格式不正确。'), 'error');
+            return;
+        }
+
+        $this->db->query($this->db->update($this->db->getPrefix() . 'passport_fails')
+            ->rows(['locked_until' => 0])
+            ->where('ip = ?', $ip));
+
+        $this->notice->set(_t('IP [%s] 已解封。', htmlspecialchars($ip)), 'success');
+    }
+
+    // --- 辅助方法 ---
+
+    private function isValidIp(string $ip): bool
+    {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6) !== false;
+    }
+
     private function generateSignature(string $token, int $uid, int $createdAt): string
     {
         $secretKey = $this->config->secretKey;
-        if (empty($secretKey)) {
-            error_log('Passport: HMAC secret key is not configured.');
-            return '';
-        }
-        $data = $token . '.' . $uid . '.' . $createdAt;
-        return hash_hmac('sha256', $data, $secretKey);
+        if (empty($secretKey)) return '';
+        return hash_hmac('sha256', "$token.$uid.$createdAt", $secretKey);
     }
 
-    /**
-     * [安全] 验证 HMAC-SHA256 签名
-     * - 实现 Fail-Closed 原则: 如果密钥不存在，验证必须失败。
-     * @param string $token 令牌
-     * @param int $uid 用户ID
-     * @param int $createdAt 创建时间戳
-     * @param string $signature 待验证的签名
-     * @return bool
-     */
     private function verifySignature(string $token, int $uid, int $createdAt, string $signature): bool
     {
         $secretKey = $this->config->secretKey;
-        // [安全] 如果未配置密钥，验证必须失败 (Fail-Closed)
-        if (empty($secretKey)) {
-            error_log('Passport: HMAC secret key is not configured. Signature verification failed.');
-            return false;
-        }
-        $expectedSignature = $this->generateSignature($token, $uid, $createdAt);
-        // 使用 hash_equals 防止时序攻击
-        return hash_equals($expectedSignature, $signature);
+        if (empty($secretKey)) return false;
+        $expected = $this->generateSignature($token, $uid, $createdAt);
+        return hash_equals($expected, $signature);
     }
 
-    /**
-     * 清理过期或已使用的令牌
-     * @throws DbException
-     */
     private function cleanTokens()
     {
-        $expireTime = $this->options->gmtTime - 3600; // 1小时前
+        $expire = $this->options->gmtTime - 3600;
         $this->db->query($this->db->delete('table.password_reset_tokens')
-            ->where('created_at < ? OR used = ?', $expireTime, 1));
+            ->where('created_at < ? OR used = ?', $expire, 1));
+    }
+
+    private function validatePasswordComplexity(string $password): bool|string
+    {
+        $errors = [];
+        if (Common::strLen($password) < 8) $errors[] = _t('长度至少8位');
+        if (!preg_match('/[A-Z]/', $password)) $errors[] = _t('需包含大写字母');
+        if (!preg_match('/[a-z]/', $password)) $errors[] = _t('需包含小写字母');
+        if (!preg_match('/[0-9]/', $password)) $errors[] = _t('需包含数字');
+        if (!preg_match('/[\W_]/', $password)) $errors[] = _t('需包含特殊字符');
+
+        return empty($errors) ? true : implode('，', $errors) . '。';
+    }
+
+    // --- 表单生成 ---
+
+    public function forgotForm(): Typecho_Widget_Helper_Form
+    {
+        $form = new Typecho_Widget_Helper_Form(NULL, Typecho_Widget_Helper_Form::POST_METHOD);
+        $mail = new Typecho_Widget_Helper_Form_Element_Text('mail', NULL, NULL, _t('邮箱'), NULL);
+        $form->addInput($mail);
+        $mail->addRule('required', _t('请填写邮箱'));
+        $mail->addRule('email', _t('邮箱格式错误'));
+        return $form;
+    }
+
+    public function resetForm(): Typecho_Widget_Helper_Form
+    {
+        $form = new Typecho_Widget_Helper_Form(NULL, Typecho_Widget_Helper_Form::POST_METHOD);
+        $pwd = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, NULL, _t('新密码'), NULL);
+        $form->addInput($pwd);
+        $confirm = new Typecho_Widget_Helper_Form_Element_Password('confirm', NULL, NULL, _t('确认密码'), NULL);
+        $form->addInput($confirm);
+        $pwd->addRule('required', _t('请填写密码'));
+        $confirm->addRule('confirm', _t('两次密码不一致'), 'password');
+        return $form;
+    }
+
+    // --- 第三方验证码实现 ---
+
+    private function verifyRecaptcha(string $response, string $secret): bool
+    {
+        return $this->httpCheck('https://www.recaptcha.net/recaptcha/api/siteverify', ['secret' => $secret, 'response' => $response]);
+    }
+
+    private function verifyHcaptcha(string $response, string $secret): bool
+    {
+        return $this->httpCheck('https://hcaptcha.com/siteverify', ['secret' => $secret, 'response' => $response]);
+    }
+
+    private function verifyGeetest(string $lot, string $output, string $pass, string $time): bool
+    {
+        if (empty($lot) || empty($output) || empty($pass) || empty($time)) return false;
+        
+        $sign = hash_hmac('sha256', $lot, (string)$this->config->captchaKeyGeetest);
+        $url = 'https://gcaptcha4.geetest.com/validate?captcha_id=' . $this->config->captchaIdGeetest;
+        
+        $json = $this->httpRequest($url, [
+            "lot_number" => $lot, "captcha_output" => $output,
+            "pass_token" => $pass, "gen_time" => $time, "sign_token" => $sign
+        ]);
+        
+        if (!$json) return false;
+        $res = json_decode($json, true);
+        return isset($res['status']) && $res['status'] === 'success' && $res['result'] === 'success';
     }
 
     /**
-     * 校验人机验证的系统状态 (reCAPTCHA)
-     * @param string $response
-     * @param string $secretKey
-     * @return bool
+     * 通用的 HTTP 验证请求检查 (返回布尔值)
      */
-    private function verifyRecaptcha(string $response, string $secretKey): bool
+    private function httpCheck(string $url, array $data): bool
     {
-        return $this->verifyCaptchaService('https://www.recaptcha.net/recaptcha/api/siteverify', $response, $secretKey);
+        if (empty($data['response'])) return false;
+        $json = $this->httpRequest($url, $data);
+        if (!$json) return false;
+        $res = json_decode($json, true);
+        return isset($res['success']) && $res['success'];
     }
 
     /**
-     * 校验人机验证的系统状态 (hCaptcha)
-     * @param string $response
-     * @param string $secretKey
-     * @return bool
+     * 基础 HTTP 请求封装 (Typecho HttpClient)
      */
-    private function verifyHcaptcha(string $response, string $secretKey): bool
+    private function httpRequest(string $url, array $data): string|false
     {
-        return $this->verifyCaptchaService('https://hcaptcha.com/siteverify', $response, $secretKey);
-    }
-
-    /**
-     * 校验人机验证的系统状态 (Geetest)
-     * @param string $lot_number
-     * @param string $captcha_output
-     * @param string $pass_token
-     * @param string $gen_time
-     * @return bool
-     */
-    private function verifyGeetest(string $lot_number, string $captcha_output, string $pass_token, string $gen_time): bool
-    {
-        if (empty($lot_number) || empty($captcha_output) || empty($pass_token) || empty($gen_time)) {
-            return false;
-        }
-        $captcha_id = (string) $this->config->captchaIdGeetest;
-        $captcha_key = (string) $this->config->captchaKeyGeetest;
-        $sign_token = hash_hmac('sha256', $lot_number, $captcha_key);
-        $post_data = [
-            "lot_number" => $lot_number, "captcha_output" => $captcha_output,
-            "pass_token" => $pass_token, "gen_time" => $gen_time, "sign_token" => $sign_token,
-        ];
-        $url = 'https://gcaptcha4.geetest.com/validate?captcha_id=' . $captcha_id;
-        $geetest_json_result = $this->send_post($url, $post_data);
-        if ($geetest_json_result === false) {
-            error_log('Passport: request geetest api fail');
-            return false;
-        }
-        $geetest_result = json_decode($geetest_json_result, true);
-        return isset($geetest_result['status']) && $geetest_result['status'] === 'success' &&
-               isset($geetest_result['result']) && $geetest_result['result'] === 'success';
-    }
-
-    /**
-     * [安全加固] 通用 CAPTCHA 服务验证，使用 Typecho 的 HttpClient
-     * @param string $url
-     * @param string $response
-     * @param string $secretKey
-     * @return bool
-     */
-    private function verifyCaptchaService(string $url, string $response, string $secretKey): bool
-    {
-        if (empty($response)) return false;
-
         $client = HttpClient::get();
-        if (!$client) {
-            error_log('Passport: HTTP client not available for CAPTCHA service.');
+        if (!$client) return false;
+        try {
+            $client->setTimeout(10);
+            $client->setData($data);
+            $client->send($url);
+            return $client->getResponseStatus() === 200 ? $client->getResponseBody() : false;
+        } catch (HttpClientException $e) {
+            error_log("Passport HTTP Error: " . $e->getMessage());
             return false;
         }
-
-        $post_data = ['secret' => $secretKey, 'response' => $response];
-
-        try {
-            // 设置超时并发送数据
-            $client->setTimeout(10);
-            $client->setData($post_data);
-            $client->send($url);
-
-            if ($client->getResponseStatus() === 200) {
-                $result = json_decode($client->getResponseBody(), true);
-                return isset($result['success']) && $result['success'];
-            }
-        } catch (HttpClientException $e) {
-            error_log('Passport: Failed to connect to CAPTCHA service at ' . $url . ': ' . $e->getMessage());
-        }
-
-        return false;
     }
 
     /**
-     * 发送重置密码的邮件
-     * @param array $user 用户信息数组
-     * @param string $url 重置链接
-     * @return bool
+     * 发送邮件
      */
     private function sendResetEmail(array $user, string $url): bool
     {
         $mail = new PHPMailer(true);
         try {
             $mail->CharSet = "UTF-8";
-            $mail->SMTPDebug = 0; // 禁用调试输出
+            $mail->setLanguage('zh_cn', __DIR__ . '/PHPMailer/language/');
+            $mail->SMTPDebug = 0;
             $mail->isSMTP();
             $mail->Host = (string) $this->config->host;
             $mail->SMTPSecure = (string) $this->config->secure === 'none' ? '' : $this->config->secure;
@@ -609,106 +749,28 @@ class Passport_Widget extends Widget implements ActionInterface
             $mail->setFrom((string) $this->config->username, (string) $this->options->title);
             $mail->addAddress((string) $user['mail'], (string) $user['name']);
 
-            // 邮件内容替换和转义
-            $emailBody = str_replace(
+            $content = str_replace(
                 ['{username}', '{sitename}', '{requestTime}', '{resetLink}'],
-                [htmlspecialchars($user['name']), htmlspecialchars((string) Helper::options()->title), date('Y-m-d H:i:s'), htmlspecialchars($url)],
+                [
+                    htmlspecialchars($user['name']), 
+                    htmlspecialchars((string) $this->options->title), 
+                    date('Y-m-d H:i:s'), 
+                    htmlspecialchars($url)
+                ],
                 (string) $this->config->emailTemplate
             );
 
             $mail->isHTML(true);
-            $mail->Subject = (string) Helper::options()->title . _t(' - 密码重置');
-            $mail->Body = $emailBody;
-            $mail->AltBody = strip_tags($emailBody);
+            $mail->Subject = _t('确认 ') . (string) $this->options->title . _t(' 上的密码重置操作');
+            $mail->Body = $content;
+            $mail->AltBody = strip_tags($content);
 
             return $mail->send();
         } catch (PHPMailerException $e) {
-            error_log('Passport: PHPMailer Error: ' . $e->getMessage());
+            error_log('Passport Mail Error: ' . $e->getMessage());
             return false;
         }
     }
 
-    /**
-     * 申请重置密码表单
-     * @return Typecho\Widget\Helper\Form
-     */
-    public function forgotForm(): Typecho\Widget\Helper\Form
-    {
-        $form = new Typecho\Widget\Helper\Form(NULL, Typecho\Widget\Helper\Form::POST_METHOD);
-        $mail = new Typecho\Widget\Helper\Form\Element\Text('mail', NULL, NULL, _t('邮箱'), _t('请输入您忘记密码的账号所对应的邮箱地址'));
-        $form->addInput($mail);
-        $do = new Typecho\Widget\Helper\Form\Element\Hidden('do', NULL, 'mail');
-        $form->addInput($do);
-        $submit = new Typecho\Widget\Helper\Form\Element\Submit('submit', NULL, _t('提交'));
-        $submit->input->setAttribute('class', 'btn primary');
-        $form->addItem($submit);
-        $mail->addRule('required', _t('必须填写电子邮箱'));
-        $mail->addRule('email', _t('电子邮箱格式错误'));
-        return $form;
-    }
-
-    /**
-     * 设置新的密码表单
-     * @return Typecho\Widget\Helper\Form
-     */
-    public function resetForm(): Typecho\Widget\Helper\Form
-    {
-        $form = new Typecho\Widget\Helper\Form(NULL, Typecho\Widget\Helper\Form::POST_METHOD);
-        $password = new Typecho\Widget\Helper\Form\Element\Password('password', NULL, NULL, _t('新密码'), _t('建议使用特殊字符与字母、数字的混编样式,以增加系统安全性.'));
-        $password->input->setAttribute('class', 'w-100');
-        $form->addInput($password);
-        $confirm = new Typecho\Widget\Helper\Form\Element\Password('confirm', NULL, NULL, _t('密码确认'), _t('请确认你的密码, 与上面输入的密码保持一致.'));
-        $confirm->input->setAttribute('class', 'w-100');
-        $form->addInput($confirm);
-        $do = new Typecho\Widget\Helper\Form\Element\Hidden('do', NULL, 'password');
-        $form->addInput($do);
-        $submit = new Typecho\Widget\Helper\Form\Element\Submit('submit', NULL, _t('更新密码'));
-        $submit->input->setAttribute('class', 'btn primary');
-        $form->addItem($submit);
-        $password->addRule('required', _t('必须填写密码'));
-        $confirm->addRule('confirm', _t('两次输入的密码不一致'), 'password');
-        return $form;
-    }
-
-    /**
-     * [重构] 向 CAPTCHA 平台发送 POST 请求的方法
-     * - 替换了不安全的 @file_get_contents
-     * @param string $url
-     * @param array $post_data
-     * @return string|false
-     */
-    private function send_post(string $url, array $post_data): string|false
-    {
-        $client = HttpClient::get();
-
-        if (!$client) {
-            error_log('Passport: HTTP client not available for CAPTCHA service.');
-            return false;
-        }
-
-        try {
-            $client->setTimeout(10);
-            $client->setData($post_data);
-            $client->send($url);
-
-            if ($client->getResponseStatus() === 200) {
-                return $client->getResponseBody();
-            }
-        } catch (HttpClientException $e) {
-            error_log('Passport: HTTP request failed to ' . $url . ': ' . $e->getMessage());
-        }
-
-        return false;
-    }
-
-    /**
-     * 验证IP地址的有效性
-     *
-     * @param string $ip IP地址
-     * @return bool 是否有效
-     */
-    private static function isValidIp(string $ip): bool
-    {
-        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_IPV6);
-    }
+    public function execute() {}
 }

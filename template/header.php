@@ -62,7 +62,7 @@ $header = '<link rel="stylesheet" href="' . $cssUrl('normalize.css') . '">' . "\
         <!-- 移动端视口设置 (响应式设计基础) -->
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <!-- 页面标题：使用安全检查过的 $menuTitle -->
-        <title><?php _e('%s - %s - Powered by Typecho', $menuTitle, $siteTitle); ?></title>
+        <title><?php _e('%s - %s', $menuTitle, $siteTitle); ?></title>
         <!-- Favicon 图标 -->
         <link href="/favicon.ico" rel="icon" type="image/png">
         <!-- 告知搜索引擎不要索引或跟踪此页面 (适用于后台或功能性页面) -->
