@@ -4,7 +4,7 @@
  * 忘记密码页面模板
  * 用户输入邮箱申请重置链接的页面。
  * @package Passport
- * @version 0.1.4
+ * @version 0.1.5
  */
 
 // 导入公共变量和初始化
@@ -359,6 +359,8 @@ include 'header.php';
             <?php $this->notice->render(); ?>
 
             <form action="<?php echo passport_route_url('/passport/forgot'); ?>" method="post" enctype="application/x-www-form-urlencoded" class="passport-form">
+
+                <input type="hidden" name="_token" value="<?php echo $security->token('/passport/forgot'); ?>">
 
                 <div class="passport-form-group">
                     <label class="passport-label required" for="mail-input"><?php _e('邮箱'); ?></label>

@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM & 小否先生
- * @version 0.1.4
+ * @version 0.1.5
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -187,16 +187,22 @@ class Passport_Widget extends Widget implements ActionInterface
 
         if ($this->request->isPost()) {
             try {
-                // 1. 速率限制检查
+                // 1. CSRF Token 验证
+                if (!$this->security->validateToken('/passport/forgot')) {
+                    $this->pushNotice(_t('CSRF 验证失败，请刷新页面重试。'), 'error');
+                    return;
+                }
+
+                // 2. 速率限制检查
                 $this->handleRateLimiting();
 
-                // 2. 表单验证
+                // 3. 表单验证
                 if ($error = $this->forgotForm()->validate()) {
                     $this->pushNotice($error, 'error');
                     return;
                 }
 
-                // 3. 人机验证
+                // 4. 人机验证
                 if (!$this->verifyCaptcha()) {
                     $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
                     return;
@@ -210,17 +216,29 @@ class Passport_Widget extends Widget implements ActionInterface
 
                 // 防范用户枚举：无论用户是否存在，表面流程一致
                 if (!empty($user)) {
-                    $token = Common::randString(64);
                     $createdAt = $this->options->gmtTime;
-                    // 生成带签名的安全链接
-                    $signature = $this->generateSignature($token, (int)$user['uid'], $createdAt);
-
-                    $this->db->query($this->db->insert('table.password_reset_tokens')->rows([
-                        'token' => $token, 
-                        'uid' => $user['uid'], 
-                        'created_at' => $createdAt, 
-                        'used' => 0
-                    ]));
+                    $uid = (int)$user['uid'];
+                    
+                    // 检查该用户是否已有未使用的 token（只查询最近 24 小时）
+                    $existingToken = $this->db->fetchRow($this->db->select()->from('table.password_reset_tokens')
+                        ->where('uid = ? AND used = ? AND created_at > ?', $uid, 0, $createdAt - 86400));
+                    
+                    if (!empty($existingToken)) {
+                        // 如果有未过期的未使用 token，使用现有的
+                        $token = $existingToken['token'];
+                        $signature = $this->generateSignature($token, $uid, (int)$existingToken['created_at']);
+                    } else {
+                        // 否则生成新的 token（包含时间因素，确保不重复）
+                        $token = $this->generateTimeBasedToken($uid, $createdAt);
+                        $signature = $this->generateSignature($token, $uid, $createdAt);
+                        
+                        $this->db->query($this->db->insert('table.password_reset_tokens')->rows([
+                            'token' => $token, 
+                            'uid' => $uid, 
+                            'created_at' => $createdAt, 
+                            'used' => 0
+                        ]));
+                    }
 
                     $resetLink = Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index);
 
@@ -288,16 +306,22 @@ class Passport_Widget extends Widget implements ActionInterface
 
         if ($this->request->isPost()) {
              try {
-                // 1. 速率限制
+                // 1. CSRF Token 验证
+                if (!$this->security->validateToken('/passport/reset')) {
+                    $this->pushNotice(_t('CSRF 验证失败，请刷新页面重试。'), 'error');
+                    return;
+                }
+
+                // 2. 速率限制
                 $this->handleRateLimiting();
 
-                // 2. 表单校验
+                // 3. 表单校验
                 if ($error = $this->resetForm()->validate()) {
                     $this->pushNotice($error, 'error');
                     return;
                 }
 
-                // 3. 密码复杂度校验
+                // 4. 密码复杂度校验
                 $password = (string) $this->request->password;
                 $complexityCheck = $this->validatePasswordComplexity($password);
                 if ($complexityCheck !== true) {
@@ -305,7 +329,7 @@ class Passport_Widget extends Widget implements ActionInterface
                     return;
                 }
 
-                // 4. 人机验证
+                // 5. 人机验证
                 if (!$this->verifyCaptcha()) {
                     $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
                     return;
@@ -320,7 +344,7 @@ class Passport_Widget extends Widget implements ActionInterface
                     ->rows(['password' => $passwordHash])
                     ->where('uid = ?', $tokenRecord['uid']));
                 
-                // 标记令牌已用
+                // 标记 token 为已使用，保留记录以便审计
                 $this->db->query($this->db->update('table.password_reset_tokens')
                     ->rows(['used' => 1])
                     ->where('token = ?', $token));
@@ -821,7 +845,21 @@ class Passport_Widget extends Widget implements ActionInterface
     {
         $secretKey = $this->config->secretKey;
         if (empty($secretKey)) return '';
+        // HMAC 签名包含 token、uid 和创建时间，确保时间因素参与
         return hash_hmac('sha256', "$token.$uid.$createdAt", $secretKey);
+    }
+
+    private function generateTimeBasedToken(int $uid, int $createdAt): string
+    {
+        // 生成包含时间因素的 token，确保不重复
+        // 使用：UID + 时间戳 + 随机字符串的组合
+        $timePart = dechex($createdAt);
+        $uidPart = dechex($uid);
+        $randomPart = Common::randString(32);
+        
+        // 组合并哈希，确保唯一性和安全性
+        $combined = $timePart . $uidPart . $randomPart;
+        return hash('sha256', $combined);
     }
 
     private function verifySignature(string $token, int $uid, int $createdAt, string $signature): bool
@@ -835,8 +873,18 @@ class Passport_Widget extends Widget implements ActionInterface
     private function cleanTokens()
     {
         $expire = $this->options->gmtTime - 3600;
+        
+        // 清理过期的未使用 token（1小时过期）
         $this->db->query($this->db->delete('table.password_reset_tokens')
-            ->where('created_at < ? OR used = ?', $expire, 1));
+            ->where('created_at < ? AND used = ?', $expire, 0));
+        
+        // 根据配置清理已使用的 token
+        $retentionDays = (int)($this->config->tokenRetentionDays ?? 30);
+        if ($retentionDays > 0) {
+            $retentionExpire = $this->options->gmtTime - ($retentionDays * 86400);
+            $this->db->query($this->db->delete('table.password_reset_tokens')
+                ->where('created_at < ? AND used = ?', $retentionExpire, 1));
+        }
     }
 
     private function validatePasswordComplexity(string $password): bool|string

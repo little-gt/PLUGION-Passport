@@ -98,6 +98,10 @@ if (strpos($version, '/') !== false) {
  */
 function passport_route_url(string $route): string
 {
-    global $options;
-    return \Typecho\Common::url($route, $options->index);
+    try {
+        $options = Typecho_Widget::widget('Widget_Options');
+        return \Typecho\Common::url($route, $options->index);
+    } catch (Throwable $e) {
+        return \Typecho\Common::url($route, '/');
+    }
 }

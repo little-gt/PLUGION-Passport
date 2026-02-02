@@ -4,7 +4,7 @@
  * 重置密码页面模板
  * 用户点击邮件链接后，输入新密码的页面。
  * @package Passport
- * @version 0.1.4
+ * @version 0.1.5
  */
 
 // 导入公共变量和初始化
@@ -363,6 +363,8 @@ include 'header.php';
             <?php $this->notice->render(); ?>
 
             <form action="<?php echo passport_route_url('/passport/reset'); ?>?token=<?php echo $token; ?>&signature=<?php echo $signature; ?>" method="post" enctype="application/x-www-form-urlencoded" class="passport-form">
+
+                <input type="hidden" name="_token" value="<?php echo $security->token('/passport/reset'); ?>">
 
                 <div class="passport-form-group">
                     <label class="passport-label required" for="password-input"><?php _e('新密码'); ?></label>

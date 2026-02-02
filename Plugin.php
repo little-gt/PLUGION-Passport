@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM
- * @version 0.1.4
+ * @version 0.1.5
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -145,12 +145,12 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         // IP 解封请求的完整 URL
         $actionUrl = Helper::security()->getIndex(Helper::url(self::ROUTE_UNBLOCK_IP_PATH, Helper::options()->index));
 
-        // --- SMTP 设置组 ---
+        // --- 邮件服务配置组 ---
 
-        $host = new Typecho_Widget_Helper_Form_Element_Text('host', NULL, 'smtp.example.com', _t('<h2>邮件服务配置</h2>服务器 (SMTP)'), _t('<span style="color: #ce5252;">必须</span> 如: smtp.163.com'));
-        $port = new Typecho_Widget_Helper_Form_Element_Text('port', NULL, '465', _t('端口'), _t('<span style="color: #ce5252;">必须</span> 如: 25、465(SSL)、587(TLS)'));
-        $username = new Typecho_Widget_Helper_Form_Element_Text('username', NULL, 'noreply@example.com', _t('帐号'), _t('<span style="color: #ce5252;">必须</span> 如: example@163.com'));
-        $password = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, '', _t('密码'), _t('<span style="color: #5e6db3;">说明</span> 如账号为无需密码验证的账号，可以留空。<span style="color: #35a937;">推荐配置客户端授权码。</span>'));
+        $host = new Typecho_Widget_Helper_Form_Element_Text('host', NULL, 'smtp.example.com', _t('SMTP 服务器'), _t('<span style="color: #ce5252;">必须</span> 如: smtp.163.com'));
+        $port = new Typecho_Widget_Helper_Form_Element_Text('port', NULL, '465', _t('SMTP 端口'), _t('<span style="color: #ce5252;">必须</span> 如: 25、465(SSL)、587(TLS)'));
+        $username = new Typecho_Widget_Helper_Form_Element_Text('username', NULL, 'noreply@example.com', _t('SMTP 帐号'), _t('<span style="color: #ce5252;">必须</span> 如: example@163.com'));
+        $password = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, '', _t('SMTP 密码'), _t('<span style="color: #5e6db3;">说明</span> 如账号为无需密码验证的账号，可以留空。<span style="color: #35a937;">推荐配置客户端授权码。</span>'));
         $secure = new Typecho_Widget_Helper_Form_Element_Select('secure', ['ssl' => _t('SSL'), 'tls' => _t('TLS'), 'none' => _t('无')], 'ssl', _t('加密类型'));
 
         $form->addInput($host);
@@ -201,7 +201,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         $emailTemplate = new Typecho_Widget_Helper_Form_Element_Textarea('emailTemplate', NULL, $defaultTemplate, _t('<h2>邮件模板配置</h2>邮件内容'), _t('<span style="color: #5e6db3;">说明</span> 请使用 {username} {sitename} {requestTime} {resetLink} 作为占位符'));
         $form->addInput($emailTemplate);
 
-        // --- CAPTCHA 设置组 ---
+        // --- 人机验证配置组 ---
 
         // 移除了 'none' 选项，强制开启验证
         $captchaType = new Typecho_Widget_Helper_Form_Element_Select(
@@ -235,21 +235,27 @@ class Passport_Plugin implements Typecho_Plugin_Interface
 
         // --- 高级设置组 ---
 
-        $secretKey = new Typecho_Widget_Helper_Form_Element_Text('secretKey', NULL, self::generateStrongRandomKey(32), _t('<h2>高级功能设置</h2>HMAC 密钥'), _t('<span style="color: #5e6db3;">说明</span> 用于令牌签名验证的密钥。首次激活时已自动生成，<span style="color: #ce5252;">留空将禁用签名验证（极不推荐）</span>。'));
+        $secretKey = new Typecho_Widget_Helper_Form_Element_Text('secretKey', NULL, self::generateStrongRandomKey(32), _t('<h2>安全策略配置</h2>HMAC 签名密钥'), _t('<span style="color: #5e6db3;">说明</span> 用于令牌签名验证的密钥。首次激活时已自动生成，<span style="color: #ce5252;">留空将禁用签名验证（极不推荐）</span>。'));
         $form->addInput($secretKey);
 
-        $enableRateLimit = new Typecho_Widget_Helper_Form_Element_Radio('enableRateLimit', ['1' => _t('启用'), '0' => _t('禁用')], '1', _t('启用请求速率限制？'), _t('<span style="color: #5e6db3;">说明</span> 可防止暴力破解和邮件滥用，并自动临时封禁风险IP。'));
+        $enableRateLimit = new Typecho_Widget_Helper_Form_Element_Radio('enableRateLimit', ['1' => _t('启用'), '0' => _t('禁用')], '1', _t('启用请求速率限制'), _t('<span style="color: #5e6db3;">说明</span> 可防止暴力破解和邮件滥用，并自动临时封禁风险IP。'));
         $form->addInput($enableRateLimit);
 
-        $deleteDataOnDeactivate = new Typecho_Widget_Helper_Form_Element_Radio('deleteDataOnDeactivate', ['1' => _t('是，删除所有数据'), '0' => _t('否，保留数据')], '0', _t('禁用插件删除数据？'), _t('<span style="color: #5e6db3;">说明</span> 选择"是"将在禁用插件时，永久删除此插件创建的所有数据库表和设置。'));
+        $deleteDataOnDeactivate = new Typecho_Widget_Helper_Form_Element_Radio('deleteDataOnDeactivate', ['1' => _t('是，删除所有数据'), '0' => _t('否，保留数据')], '0', _t('禁用插件时删除数据'), _t('<span style="color: #5e6db3;">说明</span> 选择"是"将在禁用插件时，永久删除此插件创建的所有数据库表和设置。'));
         $form->addInput($deleteDataOnDeactivate);
 
         // --- 日志管理设置组 ---
-        $logPageSize = new Typecho_Widget_Helper_Form_Element_Text('logPageSize', NULL, '25', _t('<h2>日志管理设置</h2>每页显示记录数'), _t('<span style="color: #5e6db3;">说明</span> 设置请求日志每页显示的记录数量，建议设置为 10-50 之间的数值。'));
+        $logPageSize = new Typecho_Widget_Helper_Form_Element_Text('logPageSize', NULL, '25', _t('<h2>日志管理配置</h2>请求日志每页显示数'), _t('<span style="color: #5e6db3;">说明</span> 设置请求日志每页显示的记录数量，建议设置为 10-50 之间的数值。'));
         $form->addInput($logPageSize);
 
-        $logRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('logRetentionDays', NULL, '0', _t('日志保留天数'), _t('<span style="color: #5e6db3;">说明</span> 自动清理超过指定天数的日志记录，设置为 0 表示不自动清理。'));
+        $logRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('logRetentionDays', NULL, '0', _t('请求日志保留天数'), _t('<span style="color: #5e6db3;">说明</span> 自动清理超过指定天数的请求日志记录，设置为 0 表示不自动清理。'));
         $form->addInput($logRetentionDays);
+
+        $resetHistoryPageSize = new Typecho_Widget_Helper_Form_Element_Text('resetHistoryPageSize', NULL, '25', _t('密码重置历史每页显示数'), _t('<span style="color: #5e6db3;">说明</span> 设置密码重置历史每页显示的记录数量，建议设置为 10-50 之间的数值。'));
+        $form->addInput($resetHistoryPageSize);
+
+        $tokenRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('tokenRetentionDays', NULL, '30', _t('密码重置历史保留天数'), _t('<span style="color: #5e6db3;">说明</span> 保留已使用和过期的 token 记录的天数，用于安全审计。设置为 0 表示永久保留。建议设置为 30-90 天。'));
+        $form->addInput($tokenRetentionDays);
 
         // --- IP 策略设置组 ---
         $ipSource = new Typecho_Widget_Helper_Form_Element_Select(
@@ -281,6 +287,15 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         } catch (Exception $e) {
             echo '<p style="color: #ce5252;">' . _t('风险日志加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
             error_log('Passport config risk log failed: ' . $e->getMessage());
+        }
+
+        // --- 密码重置历史记录 ---
+        try {
+            echo '<h2>' . _t('密码重置历史记录') . '</h2>';
+            echo self::renderPasswordResetHistory();
+        } catch (Exception $e) {
+            echo '<p style="color: #ce5252;">' . _t('密码重置历史加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
+            error_log('Passport config password reset history failed: ' . $e->getMessage());
         }
 
         // --- 动态JS：验证码与IP策略切换 ---
@@ -315,6 +330,12 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             ? (int) $config->logRetentionDays
             : 30;
 
+        // 获取搜索和分页参数
+        $searchIp = isset($_GET['passport_log_search']) ? trim($_GET['passport_log_search']) : '';
+        $filterStatus = isset($_GET['passport_log_filter']) ? trim($_GET['passport_log_filter']) : 'all';
+        $page = isset($_GET['passport_log_page']) ? max(1, (int) $_GET['passport_log_page']) : 1;
+        $offset = ($page - 1) * $pageSize;
+
         // 自动清理过期日志
         if ($retentionDays > 0) {
             $expireTime = time() - ($retentionDays * 86400);
@@ -328,18 +349,34 @@ class Passport_Plugin implements Typecho_Plugin_Interface
 
         // 检查表是否存在，避免首次启用时报错
         try {
+            // 构建查询条件
+            $select = $db->select()->from("{$prefix}passport_fails");
+            
+            // 添加搜索条件
+            if (!empty($searchIp)) {
+                $select->where("ip LIKE ?", '%' . $searchIp . '%');
+            }
+            
+            // 添加筛选条件
+            $now = time();
+            if ($filterStatus === 'locked') {
+                $select->where("locked_until > ?", $now);
+            } elseif ($filterStatus === 'safe') {
+                $select->where("locked_until <= ?", 0);
+            } elseif ($filterStatus === 'expired') {
+                $select->where("locked_until > ?", 0)->where("locked_until <= ?", $now);
+            }
+
             // 获取总记录数
-            $totalQuery = $db->select()->from("{$prefix}passport_fails");
+            $totalQuery = clone $select;
             $totalResult = $db->fetchRow($totalQuery->select('COUNT(*) as total'));
             $total = isset($totalResult['total']) ? (int) $totalResult['total'] : 0;
 
             // 计算分页
-            $page = isset($_GET['passport_page']) ? max(1, (int) $_GET['passport_page']) : 1;
-            $offset = ($page - 1) * $pageSize;
             $totalPages = (int) ceil($total / $pageSize);
 
             // 获取当前页数据
-            $logs = $db->fetchAll($db->select()->from("{$prefix}passport_fails")
+            $logs = $db->fetchAll($select
                 ->order("{$prefix}passport_fails.last_attempt", Typecho_Db::SORT_DESC)
                 ->limit($pageSize)
                 ->offset($offset));
@@ -349,42 +386,39 @@ class Passport_Plugin implements Typecho_Plugin_Interface
 
         $html = '<div id="passport-log-container">';
         
-        // 搜索和筛选栏
+        // 搜索和刷新栏
         $html .= '<div class="passport-log-toolbar">';
         $html .= '<div class="passport-log-toolbar-inner">';
         $html .= '<div class="toolbar-group">';
         $html .= '<label class="toolbar-label" for="passport-log-search">' . _t('搜索') . ':</label>';
-        $html .= '<input type="text" id="passport-log-search" placeholder="' . _t('IP 地址') . '">';
+        $html .= '<input type="text" id="passport-log-search" placeholder="' . _t('IP 地址') . '" value="' . htmlspecialchars($searchIp) . '">';
         $html .= '</div>';
         $html .= '<div class="toolbar-group">';
         $html .= '<label class="toolbar-label" for="passport-log-filter">' . _t('状态') . ':</label>';
         $html .= '<select id="passport-log-filter">';
-        $html .= '<option value="all">' . _t('全部状态') . '</option>';
-        $html .= '<option value="locked">' . _t('封禁中') . '</option>';
-        $html .= '<option value="safe">' . _t('安全') . '</option>';
-        $html .= '<option value="expired">' . _t('封禁已过期') . '</option>';
+        $html .= '<option value="all"' . ($filterStatus === 'all' ? ' selected' : '') . '>' . _t('全部状态') . '</option>';
+        $html .= '<option value="locked"' . ($filterStatus === 'locked' ? ' selected' : '') . '>' . _t('封禁中') . '</option>';
+        $html .= '<option value="safe"' . ($filterStatus === 'safe' ? ' selected' : '') . '>' . _t('安全') . '</option>';
+        $html .= '<option value="expired"' . ($filterStatus === 'expired' ? ' selected' : '') . '>' . _t('封禁已过期') . '</option>';
         $html .= '</select>';
         $html .= '</div>';
         $html .= '<div class="toolbar-group">';
+        $html .= '<button type="button" id="passport-log-search-btn" class="btn btn-s">' . _t('搜索') . '</button>';
         $html .= '<button type="button" id="passport-log-refresh" class="btn btn-s">' . _t('刷新') . '</button>';
         $html .= '</div>';
-        $html .= '</div>';
-        $html .= '<div class="passport-log-batch-actions">';
-        $html .= '<button type="button" id="passport-log-batch-unblock" class="btn btn-s btn-warn" style="display: none;">' . _t('批量解封') . '</button>';
         $html .= '</div>';
         $html .= '</div>';
 
         // 表格
         $html .= '<table class="typecho-list-table" id="passport-log-table">
-            <colgroup><col width="5%"><col width="20%"><col width="10%"><col width="25%"><col width="25%"><col width="15%"></colgroup>
+            <colgroup><col width="20%"><col width="10%"><col width="25%"><col width="25%"><col width="20%"></colgroup>
             <thead><tr>
-                <th><input type="checkbox" id="passport-log-select-all"></th>
                 <th>' . _t('IP 地址') . '</th><th>' . _t('尝试次数') . '</th><th>' . _t('最后尝试时间') . '</th><th>' . _t('状态') . '</th><th>' . _t('操作') . '</th>
             </tr></thead>
             <tbody>';
 
         if (empty($logs)) {
-            $html .= '<tr><td colspan="6"><h6 class="typecho-list-table-title">' . _t('当前没有风险记录') . '</h6></td></tr>';
+            $html .= '<tr><td colspan="5"><h6 class="typecho-list-table-title">' . _t('当前没有风险记录') . '</h6></td></tr>';
         } else {
             $now = time();
             foreach ($logs as $log) {
@@ -412,7 +446,6 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                 }
 
                 $html .= '<tr data-status="' . $statusClass . '" data-ip="' . $ip . '">' .
-                         '<td><input type="checkbox" class="passport-log-checkbox" value="' . $ip . '"></td>' .
                          '<td>' . $ip . '</td>' .
                          '<td>' . $attempts . '</td>' .
                          '<td>' . date('Y-m-d H:i:s', $lastAttempt) . '</td>' .
@@ -433,10 +466,21 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             if ($totalPages > 1) {
                 $html .= '<div class="pagination">';
                 
+                // 构建基础 URL 参数
+                $baseUrlParams = [];
+                if (!empty($searchIp)) {
+                    $baseUrlParams['passport_log_search'] = $searchIp;
+                }
+                if ($filterStatus !== 'all') {
+                    $baseUrlParams['passport_log_filter'] = $filterStatus;
+                }
+                
                 // 上一页
                 if ($page > 1) {
                     $prevPage = $page - 1;
-                    $html .= '<a href="#" class="page-link" data-page="' . $prevPage . '">&laquo; ' . _t('上一页') . '</a>';
+                    $params = array_merge($baseUrlParams, ['passport_log_page' => $prevPage]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">&laquo; ' . _t('上一页') . '</a>';
                 }
                 
                 // 页码
@@ -444,7 +488,9 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                 $endPage = min($totalPages, $page + 2);
                 
                 if ($startPage > 1) {
-                    $html .= '<a href="#" class="page-link" data-page="1">1</a>';
+                    $params = array_merge($baseUrlParams, ['passport_log_page' => 1]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">1</a>';
                     if ($startPage > 2) {
                         $html .= '<span class="page-ellipsis">...</span>';
                     }
@@ -452,20 +498,26 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                 
                 for ($i = $startPage; $i <= $endPage; $i++) {
                     $activeClass = $i == $page ? ' active' : '';
-                    $html .= '<a href="#" class="page-link' . $activeClass . '" data-page="' . $i . '">' . $i . '</a>';
+                    $params = array_merge($baseUrlParams, ['passport_log_page' => $i]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link' . $activeClass . '">' . $i . '</a>';
                 }
                 
                 if ($endPage < $totalPages) {
                     if ($endPage < $totalPages - 1) {
                         $html .= '<span class="page-ellipsis">...</span>';
                     }
-                    $html .= '<a href="#" class="page-link" data-page="' . $totalPages . '">' . $totalPages . '</a>';
+                    $params = array_merge($baseUrlParams, ['passport_log_page' => $totalPages]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">' . $totalPages . '</a>';
                 }
                 
                 // 下一页
                 if ($page < $totalPages) {
                     $nextPage = $page + 1;
-                    $html .= '<a href="#" class="page-link" data-page="' . $nextPage . '">' . _t('下一页') . ' &raquo;</a>';
+                    $params = array_merge($baseUrlParams, ['passport_log_page' => $nextPage]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">' . _t('下一页') . ' &raquo;</a>';
                 }
                 
                 $html .= '</div>';
@@ -481,6 +533,199 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         // 添加样式和脚本
         $html .= self::getLogTableStyles();
         $html .= self::getLogTableScripts($actionUrl, $pageSize);
+
+        return $html;
+    }
+
+    /**
+     * 渲染密码重置历史记录
+     *
+     * @return string HTML表格字符串
+     */
+    private static function renderPasswordResetHistory(): string
+    {
+        $db = Typecho_Db::get();
+        $prefix = $db->getPrefix();
+
+        // 获取配置
+        $config = Helper::options()->plugin('Passport');
+        $pageSize = isset($config->resetHistoryPageSize) && is_numeric($config->resetHistoryPageSize) 
+            ? (int) $config->resetHistoryPageSize 
+            : 25;
+
+        // 获取搜索和分页参数
+        $searchUid = isset($_GET['passport_reset_search']) ? trim($_GET['passport_reset_search']) : '';
+        $page = isset($_GET['passport_reset_page']) ? max(1, (int) $_GET['passport_reset_page']) : 1;
+        $offset = ($page - 1) * $pageSize;
+
+        // 检查表是否存在
+        try {
+            // 构建查询条件
+            $thirtyDaysAgo = time() - (30 * 86400);
+            $select = $db->select()->from("{$prefix}password_reset_tokens")->where("created_at > ?", $thirtyDaysAgo);
+            
+            // 添加搜索条件
+            if (!empty($searchUid) && is_numeric($searchUid)) {
+                $select->where("uid = ?", (int)$searchUid);
+            }
+
+            // 获取总记录数
+            $totalQuery = clone $select;
+            $totalResult = $db->fetchRow($totalQuery->select('COUNT(*) as total'));
+            $total = isset($totalResult['total']) ? (int) $totalResult['total'] : 0;
+
+            // 计算分页
+            $totalPages = (int) ceil($total / $pageSize);
+
+            // 获取当前页数据（关联用户表获取邮箱）
+            $logs = $db->fetchAll($select
+                ->join("{$prefix}users", "{$prefix}password_reset_tokens.uid = {$prefix}users.uid", Typecho_Db::LEFT_JOIN)
+                ->select("{$prefix}password_reset_tokens.uid", "{$prefix}password_reset_tokens.token", "{$prefix}password_reset_tokens.created_at", "{$prefix}password_reset_tokens.used", "{$prefix}users.mail")
+                ->order("{$prefix}password_reset_tokens.created_at", Typecho_Db::SORT_DESC)
+                ->limit($pageSize)
+                ->offset($offset));
+        } catch (Typecho_Db_Exception $e) {
+            return '<p>' . _t('密码重置记录表尚未创建，保存配置后将会自动创建。') . '</p>';
+        }
+
+        $html = '<div id="passport-reset-history-container">';
+        
+        // 搜索和刷新栏
+        $html .= '<div class="passport-log-toolbar">';
+        $html .= '<div class="passport-log-toolbar-inner">';
+        $html .= '<div class="toolbar-group">';
+        $html .= '<label class="toolbar-label" for="passport-reset-history-search">' . _t('搜索') . ':</label>';
+        $html .= '<input type="text" id="passport-reset-history-search" placeholder="' . _t('用户 ID') . '" value="' . htmlspecialchars($searchUid) . '">';
+        $html .= '</div>';
+        $html .= '<div class="toolbar-group">';
+        $html .= '<button type="button" id="passport-reset-history-search-btn" class="btn btn-s">' . _t('搜索') . '</button>';
+        $html .= '<button type="button" id="passport-reset-history-refresh" class="btn btn-s">' . _t('刷新') . '</button>';
+        $html .= '</div>';
+        $html .= '</div>';
+        $html .= '</div>';
+
+        // 表格
+        $html .= '<table class="typecho-list-table" id="passport-reset-history-table">
+            <colgroup><col width="15%"><col width="25%"><col width="20%"><col width="20%"><col width="10%"><col width="10%"></colgroup>
+            <thead><tr>
+                <th>' . _t('用户 ID') . '</th><th>' . _t('用户邮箱') . '</th><th>' . _t('Token') . '</th><th>' . _t('创建时间') . '</th><th>' . _t('状态') . '</th><th>' . _t('说明') . '</th>
+            </tr></thead>
+            <tbody>';
+
+        if (empty($logs)) {
+            $html .= '<tr><td colspan="6"><h6 class="typecho-list-table-title">' . _t('当前没有密码重置记录') . '</h6></td></tr>';
+        } else {
+            $now = time();
+            foreach ($logs as $log) {
+                $uid = (int) ($log['uid'] ?? 0);
+                $mail = htmlspecialchars((string) ($log['mail'] ?? ''));
+                $token = htmlspecialchars((string) ($log['token'] ?? ''));
+                $createdAt = (int) ($log['created_at'] ?? 0);
+                $used = (int) ($log['used'] ?? 0);
+
+                // 只显示 token 的前 8 位和后 8 位
+                $tokenDisplay = strlen($token) > 16 
+                    ? substr($token, 0, 8) . '...' . substr($token, -8) 
+                    : $token;
+
+                $statusClass = 'unused';
+                $statusText = _t('未使用');
+                $description = '';
+
+                if ($used === 1) {
+                    $statusClass = 'used';
+                    $statusText = _t('已使用');
+                    $description = _t('密码已成功重置');
+                } elseif ($createdAt < $now - 3600) {
+                    $statusClass = 'expired';
+                    $statusText = _t('已过期');
+                    $description = _t('超过 1 小时未使用');
+                } else {
+                    $remainingTime = $createdAt + 3600 - $now;
+                    $remainingMinutes = (int) ceil($remainingTime / 60);
+                    $description = _t('剩余约 %s 分钟', $remainingMinutes);
+                }
+
+                $html .= '<tr>' .
+                         '<td>' . $uid . '</td>' .
+                         '<td>' . ($mail ?: '<em>' . _t('未知') . '</em>') . '</td>' .
+                         '<td><code>' . $tokenDisplay . '</code></td>' .
+                         '<td>' . date('Y-m-d H:i:s', $createdAt) . '</td>' .
+                         '<td><span class="passport-log-status passport-log-status-' . $statusClass . '">' . $statusText . '</span></td>' .
+                         '<td>' . $description . '</td>' .
+                         '</tr>';
+            }
+        }
+
+        $html .= '</tbody></table>';
+
+        // 分页信息
+        if ($total > 0) {
+            $html .= '<div class="passport-log-pagination">';
+            $html .= '<div class="passport-log-pagination-inner">';
+            $html .= '<div class="page-info">' . _t('共 %s 条记录', $total) . '</div>';
+            
+            if ($totalPages > 1) {
+                $html .= '<div class="pagination">';
+                
+                // 构建基础 URL 参数
+                $baseUrlParams = [];
+                if (!empty($searchUid)) {
+                    $baseUrlParams['passport_reset_search'] = $searchUid;
+                }
+                
+                // 上一页
+                if ($page > 1) {
+                    $prevPage = $page - 1;
+                    $params = array_merge($baseUrlParams, ['passport_reset_page' => $prevPage]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">&laquo; ' . _t('上一页') . '</a>';
+                }
+                
+                // 页码
+                $startPage = max(1, $page - 2);
+                $endPage = min($totalPages, $page + 2);
+                
+                if ($startPage > 1) {
+                    $params = array_merge($baseUrlParams, ['passport_reset_page' => 1]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">1</a>';
+                    if ($startPage > 2) {
+                        $html .= '<span class="page-ellipsis">...</span>';
+                    }
+                }
+                
+                for ($i = $startPage; $i <= $endPage; $i++) {
+                    $activeClass = ($i === $page) ? ' active' : '';
+                    $params = array_merge($baseUrlParams, ['passport_reset_page' => $i]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link' . $activeClass . '">' . $i . '</a>';
+                }
+                
+                if ($endPage < $totalPages) {
+                    if ($endPage < $totalPages - 1) {
+                        $html .= '<span class="page-ellipsis">...</span>';
+                    }
+                    $params = array_merge($baseUrlParams, ['passport_reset_page' => $totalPages]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">' . $totalPages . '</a>';
+                }
+                
+                // 下一页
+                if ($page < $totalPages) {
+                    $nextPage = $page + 1;
+                    $params = array_merge($baseUrlParams, ['passport_reset_page' => $nextPage]);
+                    $url = '?' . http_build_query($params);
+                    $html .= '<a href="' . $url . '" class="page-link">' . _t('下一页') . ' &raquo;</a>';
+                }
+                
+                $html .= '</div>';
+            }
+            
+            $html .= '</div></div>';
+        }
+
+        $html .= '</div>';
 
         return $html;
     }
@@ -549,6 +794,40 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                 if (ipSourceSelector) {
                     ipSourceSelector.addEventListener('change', toggleIpSettings);
                     toggleIpSettings(); // 初始化
+                }
+
+                // --- 密码重置历史刷新和搜索 ---
+                const refreshResetButton = document.getElementById('passport-reset-history-refresh');
+                const searchResetButton = document.getElementById('passport-reset-history-search-btn');
+                const searchResetInput = document.getElementById('passport-reset-history-search');
+                
+                if (refreshResetButton) {
+                    refreshResetButton.addEventListener('click', function() {
+                        window.location.reload();
+                    });
+                }
+                
+                if (searchResetButton && searchResetInput) {
+                    searchResetButton.addEventListener('click', function() {
+                        const searchValue = searchResetInput.value.trim();
+                        const currentUrl = new URL(window.location.href);
+                        
+                        if (searchValue) {
+                            currentUrl.searchParams.set('passport_reset_search', searchValue);
+                        } else {
+                            currentUrl.searchParams.delete('passport_reset_search');
+                        }
+                        currentUrl.searchParams.set('passport_reset_page', '1');
+                        
+                        window.location.href = currentUrl.toString();
+                    });
+                    
+                    // 支持回车键搜索
+                    searchResetInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            searchResetButton.click();
+                        }
+                    });
                 }
             });
         </script>
@@ -769,42 +1048,19 @@ JS;
             .passport-log-status-expired {
                 color: #999;
             }
-            .passport-log-checkbox {
-                cursor: pointer;
-                width: 16px;
-                height: 16px;
-                margin: 0;
-                vertical-align: middle;
+            .passport-log-status-used {
+                color: #35a937;
+                font-weight: 500;
+            }
+            .passport-log-status-unused {
+                color: #5e6db3;
+                font-weight: 500;
             }
             .passport-log-table tbody tr:hover {
                 background-color: #f9f9f9;
             }
-            .passport-log-table tbody tr.selected {
-                background-color: #e8f0fe;
-            }
             .passport-log-table td {
                 vertical-align: middle;
-            }
-            .passport-log-loading {
-                text-align: center;
-                padding: 40px 20px;
-                color: #666;
-                font-size: 14px;
-            }
-            .passport-log-loading::after {
-                content: '...';
-                animation: dots 1.5s steps(4, end) infinite;
-            }
-            @keyframes dots {
-                0%, 20% { content: '.'; }
-                40% { content: '..'; }
-                60%, 100% { content: '...'; }
-            }
-            .passport-log-batch-actions {
-                margin-top: 10px;
-            }
-            .passport-log-batch-actions .btn {
-                margin-right: 8px;
             }
             @media (max-width: 768px) {
                 .passport-log-toolbar-inner {
@@ -843,502 +1099,54 @@ CSS;
     {
         return <<<JS
         <script>
-        (function() {
-            var currentPage = 1;
-            var currentFilter = 'all';
-            var currentSearch = '';
-            var selectedIps = [];
-            var isLoading = false;
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- 请求日志刷新和搜索 ---
+            const refreshButton = document.getElementById('passport-log-refresh');
+            const searchButton = document.getElementById('passport-log-search-btn');
+            const searchInput = document.getElementById('passport-log-search');
+            const filterSelect = document.getElementById('passport-log-filter');
             
-            var actionUrl = '$actionUrl';
-            var pageSize = $pageSize;
-            
-            var console = window.console || {
-                log: function() {},
-                error: function() {},
-                warn: function() {}
-            };
-            
-            function init() {
-                try {
-                    initEventListeners();
-                } catch (e) {
-                    console.error('初始化失败:', e);
-                }
-            }
-            
-            function initEventListeners() {
-                var searchInput = document.getElementById('passport-log-search');
-                var filterSelect = document.getElementById('passport-log-filter');
-                var refreshBtn = document.getElementById('passport-log-refresh');
-                var selectAllCheckbox = document.getElementById('passport-log-select-all');
-                var batchUnblockBtn = document.getElementById('passport-log-batch-unblock');
-                
-                if (searchInput) {
-                    addEvent(searchInput, 'input', debounce(function() {
-                        currentSearch = this.value.trim();
-                        currentPage = 1;
-                        loadLogs();
-                    }, 300));
-                }
-                
-                if (filterSelect) {
-                    addEvent(filterSelect, 'change', function() {
-                        currentFilter = this.value;
-                        currentPage = 1;
-                        loadLogs();
-                    });
-                }
-                
-                if (refreshBtn) {
-                    addEvent(refreshBtn, 'click', function(e) {
-                        if (e) e.preventDefault();
-                        currentPage = 1;
-                        currentSearch = '';
-                        currentFilter = 'all';
-                        if (searchInput) searchInput.value = '';
-                        if (filterSelect) filterSelect.value = 'all';
-                        loadLogs();
-                    });
-                }
-                
-                if (selectAllCheckbox) {
-                    addEvent(selectAllCheckbox, 'change', function() {
-                        var checkboxes = document.querySelectorAll('.passport-log-checkbox');
-                        for (var i = 0; i < checkboxes.length; i++) {
-                            checkboxes[i].checked = this.checked;
-                            toggleRowSelection(checkboxes[i]);
-                        }
-                        updateBatchButton();
-                    });
-                }
-                
-                var checkboxes = document.querySelectorAll('.passport-log-checkbox');
-                for (var i = 0; i < checkboxes.length; i++) {
-                    if (!checkboxes[i].id || checkboxes[i].id !== 'passport-log-select-all') {
-                        addEvent(checkboxes[i], 'change', function() {
-                            toggleRowSelection(this);
-                            updateBatchButton();
-                        });
-                    }
-                }
-                
-                if (batchUnblockBtn) {
-                    addEvent(batchUnblockBtn, 'click', batchUnblock);
-                }
-                
-                bindPaginationLinks();
-                bindUnblockForms();
-            }
-            
-            function bindPaginationLinks() {
-                var links = document.querySelectorAll('.page-link');
-                for (var i = 0; i < links.length; i++) {
-                    addEvent(links[i], 'click', function(e) {
-                        if (e) e.preventDefault();
-                        var page = parseInt(this.getAttribute('data-page'));
-                        if (page && !isNaN(page) && page !== currentPage) {
-                            currentPage = page;
-                            loadLogs();
-                        }
-                    });
-                }
-            }
-            
-            function bindUnblockForms() {
-                var forms = document.querySelectorAll('.unblock-form');
-                for (var i = 0; i < forms.length; i++) {
-                    addEvent(forms[i], 'submit', function(e) {
-                        if (e) e.preventDefault();
-                        var ip = this.getAttribute('data-ip');
-                        if (ip) {
-                            unblockIp(ip, this);
-                        }
-                    });
-                }
-            }
-            
-            function addEvent(element, eventType, handler) {
-                if (!element) return;
-                
-                if (element.addEventListener) {
-                    element.addEventListener(eventType, handler, false);
-                } else if (element.attachEvent) {
-                    element.attachEvent('on' + eventType, handler);
-                } else {
-                    element['on' + eventType] = handler;
-                }
-            }
-            
-            function toggleRowSelection(checkbox) {
-                var row = checkbox.closest ? checkbox.closest('tr') : getParentByTagName(checkbox, 'tr');
-                if (row) {
-                    if (checkbox.checked) {
-                        addClass(row, 'selected');
-                    } else {
-                        removeClass(row, 'selected');
-                    }
-                }
-            }
-            
-            function updateBatchButton() {
-                var checkboxes = document.querySelectorAll('.passport-log-checkbox:checked');
-                var batchBtn = document.getElementById('passport-log-batch-unblock');
-                if (batchBtn) {
-                    batchBtn.style.display = checkboxes.length > 0 ? 'inline-block' : 'none';
-                }
-            }
-            
-            function loadLogs() {
-                if (isLoading) return;
-                isLoading = true;
-                
-                var container = document.getElementById('passport-log-container');
-                if (!container) {
-                    isLoading = false;
-                    return;
-                }
-                
-                var tbody = container.querySelector('tbody');
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="passport-log-loading">加载中</td></tr>';
-                }
-                
-                var params = 'action=passport_load_logs' +
-                    '&page=' + encodeURIComponent(currentPage) +
-                    '&filter=' + encodeURIComponent(currentFilter) +
-                    '&search=' + encodeURIComponent(currentSearch) +
-                    '&pageSize=' + encodeURIComponent(pageSize);
-                
-                sendAjaxRequest(actionUrl, params, function(data) {
-                    isLoading = false;
-                    if (data && data.success) {
-                        updateTable(data.data);
-                    } else {
-                        showError(data && data.message ? data.message : '加载失败');
-                    }
-                }, function(error) {
-                    isLoading = false;
-                    showError('网络错误：' + (error && error.message ? error.message : '未知错误'));
+            if (refreshButton) {
+                refreshButton.addEventListener('click', function() {
+                    window.location.reload();
                 });
             }
             
-            function sendAjaxRequest(url, params, successCallback, errorCallback) {
-                var xhr = createXHR();
-                if (!xhr) {
-                    if (errorCallback) {
-                        errorCallback({ message: '浏览器不支持 AJAX' });
-                    }
-                    return;
-                }
-                
-                xhr.open('POST', url, true);
-                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
-                            try {
-                                var data = JSON.parse(xhr.responseText);
-                                if (successCallback) {
-                                    successCallback(data);
-                                }
-                            } catch (e) {
-                                if (errorCallback) {
-                                    errorCallback({ message: '解析响应失败: ' + e.message });
-                                }
-                            }
-                        } else {
-                            if (errorCallback) {
-                                errorCallback({ message: '请求失败，状态码: ' + xhr.status });
-                            }
-                        }
-                    }
-                };
-                
-                xhr.onerror = function() {
-                    if (errorCallback) {
-                        errorCallback({ message: '网络错误' });
-                    }
-                };
-                
-                xhr.ontimeout = function() {
-                    if (errorCallback) {
-                        errorCallback({ message: '请求超时' });
-                    }
-                };
-                
-                xhr.timeout = 30000;
-                xhr.send(params);
-            }
-            
-            function createXHR() {
-                var xhr = null;
-                if (window.XMLHttpRequest) {
-                    xhr = new XMLHttpRequest();
-                } else if (window.ActiveXObject) {
-                    try {
-                        xhr = new ActiveXObject('Msxml2.XMLHTTP');
-                    } catch (e) {
-                        try {
-                            xhr = new ActiveXObject('Microsoft.XMLHTTP');
-                        } catch (e) {
-                            xhr = null;
-                        }
-                    }
-                }
-                return xhr;
-            }
-            
-            function updateTable(data) {
-                var container = document.getElementById('passport-log-container');
-                if (!container || !data) return;
-                
-                var tbody = container.querySelector('tbody');
-                if (tbody && data.logs) {
-                    if (!data.logs || data.logs.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="6"><h6 class="typecho-list-table-title">没有找到匹配的记录</h6></td></tr>';
+            if (searchButton && searchInput && filterSelect) {
+                searchButton.addEventListener('click', function() {
+                    const searchValue = searchInput.value.trim();
+                    const filterValue = filterSelect.value;
+                    const currentUrl = new URL(window.location.href);
+                    
+                    if (searchValue) {
+                        currentUrl.searchParams.set('passport_log_search', searchValue);
                     } else {
-                        var html = '';
-                        for (var i = 0; i < data.logs.length; i++) {
-                            html += renderLogRow(data.logs[i]);
-                        }
-                        tbody.innerHTML = html;
+                        currentUrl.searchParams.delete('passport_log_search');
                     }
-                }
-                
-                var pagination = container.querySelector('.passport-log-pagination');
-                if (pagination && data.pagination) {
-                    var paginationInner = pagination.querySelector('.passport-log-pagination-inner');
-                    if (paginationInner) {
-                        paginationInner.innerHTML = renderPagination(data.pagination);
-                    }
-                }
-                
-                bindPaginationLinks();
-                bindUnblockForms();
-                updateBatchButton();
-            }
-            
-            function renderLogRow(log) {
-                if (!log) return '';
-                
-                var statusClass = 'safe';
-                var statusText = '安全';
-                var action = '<span>-</span>';
-                
-                if (log.locked_until > 0) {
-                    var now = Math.floor(Date.now() / 1000);
-                    if (log.locked_until > now) {
-                        var remaining = log.locked_until - now;
-                        var minutes = Math.ceil(remaining / 60);
-                        statusClass = 'locked';
-                        statusText = '封禁中 (剩余约 ' + minutes + ' 分钟)';
-                        action = '<form method="post" action="' + actionUrl + '" style="margin:0; padding:0;" class="unblock-form" data-ip="' + escapeHtml(log.ip) + '">' +
-                                 '<input type="hidden" name="unblock_ip" value="' + escapeHtml(log.ip) + '">' +
-                                 '<button type="submit" class="btn btn-s btn-warn">立即解封</button>' +
-                                 '</form>';
+                    
+                    if (filterValue !== 'all') {
+                        currentUrl.searchParams.set('passport_log_filter', filterValue);
                     } else {
-                        statusClass = 'expired';
-                        statusText = '封禁已过期';
+                        currentUrl.searchParams.delete('passport_log_filter');
                     }
-                }
+                    currentUrl.searchParams.set('passport_log_page', '1');
+                    
+                    window.location.href = currentUrl.toString();
+                });
                 
-                return '<tr data-status="' + statusClass + '" data-ip="' + escapeHtml(log.ip) + '">' +
-                       '<td><input type="checkbox" class="passport-log-checkbox" value="' + escapeHtml(log.ip) + '"></td>' +
-                       '<td>' + escapeHtml(log.ip) + '</td>' +
-                       '<td>' + (log.attempts || 0) + '</td>' +
-                       '<td>' + formatTimestamp(log.last_attempt) + '</td>' +
-                       '<td><span class="passport-log-status passport-log-status-' + statusClass + '">' + escapeHtml(statusText) + '</span></td>' +
-                       '<td>' + action + '</td>' +
-                       '</tr>';
-            }
-            
-            function renderPagination(pagination) {
-                if (!pagination) return '';
+                // 支持回车键搜索
+                searchInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        searchButton.click();
+                    }
+                });
                 
-                var html = '<div class="page-info">共 ' + (pagination.total || 0) + ' 条记录</div>';
-                
-                if (pagination.totalPages > 1) {
-                    html += '<div class="pagination">';
-                    
-                    if (pagination.page > 1) {
-                        html += '<a href="#" class="page-link" data-page="' + (pagination.page - 1) + '">&laquo; 上一页</a>';
-                    }
-                    
-                    var startPage = Math.max(1, pagination.page - 2);
-                    var endPage = Math.min(pagination.totalPages, pagination.page + 2);
-                    
-                    if (startPage > 1) {
-                        html += '<a href="#" class="page-link" data-page="1">1</a>';
-                        if (startPage > 2) {
-                            html += '<span class="page-ellipsis">...</span>';
-                        }
-                    }
-                    
-                    for (var i = startPage; i <= endPage; i++) {
-                        var activeClass = i === pagination.page ? ' active' : '';
-                        html += '<a href="#" class="page-link' + activeClass + '" data-page="' + i + '">' + i + '</a>';
-                    }
-                    
-                    if (endPage < pagination.totalPages) {
-                        if (endPage < pagination.totalPages - 1) {
-                            html += '<span class="page-ellipsis">...</span>';
-                        }
-                        html += '<a href="#" class="page-link" data-page="' + pagination.totalPages + '">' + pagination.totalPages + '</a>';
-                    }
-                    
-                    if (pagination.page < pagination.totalPages) {
-                        html += '<a href="#" class="page-link" data-page="' + (pagination.page + 1) + '">下一页 &raquo;</a>';
-                    }
-                    
-                    html += '</div>';
-                }
-                
-                html += '<div class="page-info">每页 ' + (pagination.pageSize || pageSize) + ' 条</div>';
-                return html;
-            }
-            
-            function unblockIp(ip, form) {
-                var params = 'action=passport_unblock_ip' +
-                    '&ip=' + encodeURIComponent(ip);
-                
-                sendAjaxRequest(actionUrl, params, function(data) {
-                    if (data && data.success) {
-                        loadLogs();
-                    } else {
-                        alert(data && data.message ? data.message : '解封失败');
-                    }
-                }, function(error) {
-                    alert('网络错误：' + (error && error.message ? error.message : '未知错误'));
+                // 筛选变化时自动搜索
+                filterSelect.addEventListener('change', function() {
+                    searchButton.click();
                 });
             }
-            
-            function batchUnblock() {
-                var checkboxes = document.querySelectorAll('.passport-log-checkbox:checked');
-                if (!checkboxes || checkboxes.length === 0) {
-                    alert('请选择要解封的 IP');
-                    return;
-                }
-                
-                if (!confirm('确定要解封选中的 ' + checkboxes.length + ' 个 IP 吗？')) {
-                    return;
-                }
-                
-                var ips = [];
-                for (var i = 0; i < checkboxes.length; i++) {
-                    if (checkboxes[i].value) {
-                        ips.push(checkboxes[i].value);
-                    }
-                }
-                
-                var params = 'action=passport_batch_unblock' +
-                    '&ips=' + encodeURIComponent(ips.join(','));
-                
-                sendAjaxRequest(actionUrl, params, function(data) {
-                    if (data && data.success) {
-                        loadLogs();
-                    } else {
-                        alert(data && data.message ? data.message : '批量解封失败');
-                    }
-                }, function(error) {
-                    alert('网络错误：' + (error && error.message ? error.message : '未知错误'));
-                });
-            }
-            
-            function formatTimestamp(timestamp) {
-                if (!timestamp) return '-';
-                
-                var date = new Date(timestamp * 1000);
-                if (isNaN(date.getTime())) return '-';
-                
-                var year = date.getFullYear();
-                var month = padZero(date.getMonth() + 1);
-                var day = padZero(date.getDate());
-                var hours = padZero(date.getHours());
-                var minutes = padZero(date.getMinutes());
-                var seconds = padZero(date.getSeconds());
-                
-                return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
-            }
-            
-            function padZero(num) {
-                return num < 10 ? '0' + num : num;
-            }
-            
-            function escapeHtml(text) {
-                if (!text) return '';
-                var div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
-            
-            function showError(message) {
-                var tbody = document.querySelector('#passport-log-table tbody');
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="color: #ce5252; text-align: center; padding: 20px;">' + escapeHtml(message) + '</td></tr>';
-                }
-            }
-            
-            function debounce(func, wait) {
-                var timeout;
-                return function() {
-                    var context = this;
-                    var args = arguments;
-                    clearTimeout(timeout);
-                    timeout = setTimeout(function() {
-                        func.apply(context, args);
-                    }, wait);
-                };
-            }
-            
-            function addClass(element, className) {
-                if (!element) return;
-                if (element.classList) {
-                    element.classList.add(className);
-                } else {
-                    var classes = element.className.split(' ');
-                    if (classes.indexOf(className) === -1) {
-                        classes.push(className);
-                    }
-                    element.className = classes.join(' ');
-                }
-            }
-            
-            function removeClass(element, className) {
-                if (!element) return;
-                if (element.classList) {
-                    element.classList.remove(className);
-                } else {
-                    var classes = element.className.split(' ');
-                    var index = classes.indexOf(className);
-                    if (index !== -1) {
-                        classes.splice(index, 1);
-                    }
-                    element.className = classes.join(' ');
-                }
-            }
-            
-            function getParentByTagName(element, tagName) {
-                if (!element) return null;
-                tagName = tagName.toLowerCase();
-                var parent = element.parentNode;
-                while (parent && parent.tagName) {
-                    if (parent.tagName.toLowerCase() === tagName) {
-                        return parent;
-                    }
-                    parent = parent.parentNode;
-                }
-                return null;
-            }
-            
-            if (document.readyState === 'loading') {
-                addEvent(document, 'DOMContentLoaded', init);
-            } else {
-                init();
-            }
-        })();
+        });
         </script>
 JS;
     }
