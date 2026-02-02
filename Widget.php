@@ -81,7 +81,8 @@ class Passport_Widget extends Widget implements ActionInterface
     {
         // 鉴权：仅管理员可操作
         $this->user->pass('administrator');
-        $this->security->protect();
+        $security = Widget::widget('Widget_Security');
+        $security->protect();
 
         if ($this->request->isPost()) {
             $action = $this->request->get('action');
@@ -187,16 +188,10 @@ class Passport_Widget extends Widget implements ActionInterface
 
         if ($this->request->isPost()) {
             try {
-                // 1. CSRF Token 验证
-                if (!$this->security->validateToken('/passport/forgot')) {
-                    $this->pushNotice(_t('CSRF 验证失败，请刷新页面重试。'), 'error');
-                    return;
-                }
-
-                // 2. 速率限制检查
+                // 1. 速率限制检查
                 $this->handleRateLimiting();
 
-                // 3. 表单验证
+                // 2. 表单验证
                 if ($error = $this->forgotForm()->validate()) {
                     $this->pushNotice($error, 'error');
                     return;
@@ -306,22 +301,16 @@ class Passport_Widget extends Widget implements ActionInterface
 
         if ($this->request->isPost()) {
              try {
-                // 1. CSRF Token 验证
-                if (!$this->security->validateToken('/passport/reset')) {
-                    $this->pushNotice(_t('CSRF 验证失败，请刷新页面重试。'), 'error');
-                    return;
-                }
-
-                // 2. 速率限制
+                // 1. 速率限制
                 $this->handleRateLimiting();
 
-                // 3. 表单校验
+                // 2. 表单校验
                 if ($error = $this->resetForm()->validate()) {
                     $this->pushNotice($error, 'error');
                     return;
                 }
 
-                // 4. 密码复杂度校验
+                // 3. 密码复杂度校验
                 $password = (string) $this->request->password;
                 $complexityCheck = $this->validatePasswordComplexity($password);
                 if ($complexityCheck !== true) {
@@ -329,7 +318,7 @@ class Passport_Widget extends Widget implements ActionInterface
                     return;
                 }
 
-                // 5. 人机验证
+                // 4. 人机验证
                 if (!$this->verifyCaptcha()) {
                     $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
                     return;
@@ -557,7 +546,7 @@ class Passport_Widget extends Widget implements ActionInterface
      */
     private function verifyCaptcha(): bool
     {
-        $captchaType = $this->config->captchaType;
+        $captchaType = $this->config->captchaType ?? 'default';
         
         // 理论上不允许 none，但为了兼容性保留判断
         if ($captchaType === 'none') return true;
@@ -879,7 +868,11 @@ class Passport_Widget extends Widget implements ActionInterface
             ->where('created_at < ? AND used = ?', $expire, 0));
         
         // 根据配置清理已使用的 token
-        $retentionDays = (int)($this->config->tokenRetentionDays ?? 30);
+        $retentionDays = 30;
+        if (isset($this->config->tokenRetentionDays) && is_numeric($this->config->tokenRetentionDays)) {
+            $retentionDays = (int)$this->config->tokenRetentionDays;
+        }
+        
         if ($retentionDays > 0) {
             $retentionExpire = $this->options->gmtTime - ($retentionDays * 86400);
             $this->db->query($this->db->delete('table.password_reset_tokens')
@@ -939,8 +932,8 @@ class Passport_Widget extends Widget implements ActionInterface
     {
         if (empty($lot) || empty($output) || empty($pass) || empty($time)) return false;
         
-        $sign = hash_hmac('sha256', $lot, (string)$this->config->captchaKeyGeetest);
-        $url = 'https://gcaptcha4.geetest.com/validate?captcha_id=' . $this->config->captchaIdGeetest;
+        $sign = hash_hmac('sha256', $lot, (string) ($this->config->captchaKeyGeetest ?? ''));
+        $url = 'https://gcaptcha4.geetest.com/validate?captcha_id=' . ($this->config->captchaIdGeetest ?? '');
         
         $json = $this->httpRequest($url, [
             "lot_number" => $lot, "captcha_output" => $output,
@@ -993,14 +986,14 @@ class Passport_Widget extends Widget implements ActionInterface
             $mail->setLanguage('zh_cn', __DIR__ . '/PHPMailer/language/');
             $mail->SMTPDebug = 0;
             $mail->isSMTP();
-            $mail->Host = (string) $this->config->host;
-            $mail->SMTPSecure = (string) $this->config->secure === 'none' ? '' : $this->config->secure;
+            $mail->Host = (string) ($this->config->host ?? 'smtp.example.com');
+            $mail->SMTPSecure = (string) ($this->config->secure ?? 'ssl') === 'none' ? '' : ($this->config->secure ?? 'ssl');
             $mail->SMTPAuth = true;
-            $mail->Username = (string) $this->config->username;
-            $mail->Password = (string) $this->config->password;
-            $mail->Port = (int)$this->config->port;
+            $mail->Username = (string) ($this->config->username ?? '');
+            $mail->Password = (string) ($this->config->password ?? '');
+            $mail->Port = (int) ($this->config->port ?? 465);
 
-            $mail->setFrom((string) $this->config->username, (string) $this->options->title);
+            $mail->setFrom((string) ($this->config->username ?? ''), (string) $this->options->title);
             $mail->addAddress((string) $user['mail'], (string) $user['name']);
 
             $content = str_replace(
@@ -1011,7 +1004,7 @@ class Passport_Widget extends Widget implements ActionInterface
                     date('Y-m-d H:i:s'), 
                     htmlspecialchars($url)
                 ],
-                (string) $this->config->emailTemplate
+                (string) ($this->config->emailTemplate ?? '')
             );
 
             $mail->isHTML(true);

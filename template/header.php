@@ -3,7 +3,7 @@
  * Passport 插件独立前端模板 - 头部
  *
  * 用于 Typecho 插件 Passport 的独立前端页面（如找回密码、重置密码）的头部模板。
- * 依赖于 common.php 中初始化的 $options, $security, $menu, $suffixVersion。
+ * 依赖于 common.php 中初始化的 $options, $menu, $suffixVersion。
  */
 
 // 严格安全检查: 防止文件被直接访问。

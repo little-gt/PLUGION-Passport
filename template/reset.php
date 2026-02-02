@@ -362,9 +362,10 @@ include 'header.php';
 
             <?php $this->notice->render(); ?>
 
-            <form action="<?php echo passport_route_url('/passport/reset'); ?>?token=<?php echo $token; ?>&signature=<?php echo $signature; ?>" method="post" enctype="application/x-www-form-urlencoded" class="passport-form">
+            <form action="<?php echo passport_route_url('/passport/reset'); ?>" method="post" enctype="application/x-www-form-urlencoded" class="passport-form">
 
-                <input type="hidden" name="_token" value="<?php echo $security->token('/passport/reset'); ?>">
+                <input type="hidden" name="token" value="<?php echo $token; ?>">
+                <input type="hidden" name="signature" value="<?php echo $signature; ?>">
 
                 <div class="passport-form-group">
                     <label class="passport-label required" for="password-input"><?php _e('新密码'); ?></label>

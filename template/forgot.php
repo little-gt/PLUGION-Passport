@@ -360,8 +360,6 @@ include 'header.php';
 
             <form action="<?php echo passport_route_url('/passport/forgot'); ?>" method="post" enctype="application/x-www-form-urlencoded" class="passport-form">
 
-                <input type="hidden" name="_token" value="<?php echo $security->token('/passport/forgot'); ?>">
-
                 <div class="passport-form-group">
                     <label class="passport-label required" for="mail-input"><?php _e('邮箱'); ?></label>
                     <input id="mail-input" name="mail" type="email" class="passport-input" required placeholder="<?php _e('请输入您的邮箱地址'); ?>" autocomplete="email">
