@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM
- * @version 0.1.3
+ * @version 0.1.4
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -241,8 +241,15 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         $enableRateLimit = new Typecho_Widget_Helper_Form_Element_Radio('enableRateLimit', ['1' => _t('启用'), '0' => _t('禁用')], '1', _t('启用请求速率限制？'), _t('<span style="color: #5e6db3;">说明</span> 可防止暴力破解和邮件滥用，并自动临时封禁风险IP。'));
         $form->addInput($enableRateLimit);
 
-        $deleteDataOnDeactivate = new Typecho_Widget_Helper_Form_Element_Radio('deleteDataOnDeactivate', ['1' => _t('是，删除所有数据'), '0' => _t('否，保留数据')], '0', _t('禁用插件删除数据？'), _t('<span style="color: #5e6db3;">说明</span> 选择“是”将在禁用插件时，永久删除此插件创建的所有数据库表和设置。'));
+        $deleteDataOnDeactivate = new Typecho_Widget_Helper_Form_Element_Radio('deleteDataOnDeactivate', ['1' => _t('是，删除所有数据'), '0' => _t('否，保留数据')], '0', _t('禁用插件删除数据？'), _t('<span style="color: #5e6db3;">说明</span> 选择"是"将在禁用插件时，永久删除此插件创建的所有数据库表和设置。'));
         $form->addInput($deleteDataOnDeactivate);
+
+        // --- 日志管理设置组 ---
+        $logPageSize = new Typecho_Widget_Helper_Form_Element_Text('logPageSize', NULL, '25', _t('<h2>日志管理设置</h2>每页显示记录数'), _t('<span style="color: #5e6db3;">说明</span> 设置请求日志每页显示的记录数量，建议设置为 10-50 之间的数值。'));
+        $form->addInput($logPageSize);
+
+        $logRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('logRetentionDays', NULL, '0', _t('日志保留天数'), _t('<span style="color: #5e6db3;">说明</span> 自动清理超过指定天数的日志记录，设置为 0 表示不自动清理。'));
+        $form->addInput($logRetentionDays);
 
         // --- IP 策略设置组 ---
         $ipSource = new Typecho_Widget_Helper_Form_Element_Select(
@@ -271,7 +278,6 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         try {
             echo '<h2>' . _t('请求日志与封禁状态') . '</h2>';
             echo self::renderFailLogTable($actionUrl);
-            echo '<p><span style="color: #5e6db3;">说明</span> ' . _t('出于性能考虑，只展示最近的 25 条记录。') . '</p>';
         } catch (Exception $e) {
             echo '<p style="color: #ce5252;">' . _t('风险日志加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
             error_log('Passport config risk log failed: ' . $e->getMessage());
@@ -300,24 +306,85 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         $db = Typecho_Db::get();
         $prefix = $db->getPrefix();
 
+        // 获取配置
+        $config = Helper::options()->plugin('Passport');
+        $pageSize = isset($config->logPageSize) && is_numeric($config->logPageSize) 
+            ? (int) $config->logPageSize 
+            : 25;
+        $retentionDays = isset($config->logRetentionDays) && is_numeric($config->logRetentionDays)
+            ? (int) $config->logRetentionDays
+            : 30;
+
+        // 自动清理过期日志
+        if ($retentionDays > 0) {
+            $expireTime = time() - ($retentionDays * 86400);
+            try {
+                $db->query($db->delete("{$prefix}passport_fails")
+                    ->where('last_attempt < ?', $expireTime));
+            } catch (Exception $e) {
+                error_log('Passport: Failed to clean old logs - ' . $e->getMessage());
+            }
+        }
+
         // 检查表是否存在，避免首次启用时报错
         try {
+            // 获取总记录数
+            $totalQuery = $db->select()->from("{$prefix}passport_fails");
+            $totalResult = $db->fetchRow($totalQuery->select('COUNT(*) as total'));
+            $total = isset($totalResult['total']) ? (int) $totalResult['total'] : 0;
+
+            // 计算分页
+            $page = isset($_GET['passport_page']) ? max(1, (int) $_GET['passport_page']) : 1;
+            $offset = ($page - 1) * $pageSize;
+            $totalPages = (int) ceil($total / $pageSize);
+
+            // 获取当前页数据
             $logs = $db->fetchAll($db->select()->from("{$prefix}passport_fails")
                 ->order("{$prefix}passport_fails.last_attempt", Typecho_Db::SORT_DESC)
-                ->limit(25));
+                ->limit($pageSize)
+                ->offset($offset));
         } catch (Typecho_Db_Exception $e) {
             return '<p>' . _t('日志表尚未创建，保存配置后将会自动创建。') . '</p>';
         }
 
-        $html = '<table class="typecho-list-table">
-            <colgroup><col width="20%"><col width="10%"><col width="25%"><col width="25%"><col width="20%"></colgroup>
+        $html = '<div id="passport-log-container">';
+        
+        // 搜索和筛选栏
+        $html .= '<div class="passport-log-toolbar">';
+        $html .= '<div class="passport-log-toolbar-inner">';
+        $html .= '<div class="toolbar-group">';
+        $html .= '<label class="toolbar-label" for="passport-log-search">' . _t('搜索') . ':</label>';
+        $html .= '<input type="text" id="passport-log-search" placeholder="' . _t('IP 地址') . '">';
+        $html .= '</div>';
+        $html .= '<div class="toolbar-group">';
+        $html .= '<label class="toolbar-label" for="passport-log-filter">' . _t('状态') . ':</label>';
+        $html .= '<select id="passport-log-filter">';
+        $html .= '<option value="all">' . _t('全部状态') . '</option>';
+        $html .= '<option value="locked">' . _t('封禁中') . '</option>';
+        $html .= '<option value="safe">' . _t('安全') . '</option>';
+        $html .= '<option value="expired">' . _t('封禁已过期') . '</option>';
+        $html .= '</select>';
+        $html .= '</div>';
+        $html .= '<div class="toolbar-group">';
+        $html .= '<button type="button" id="passport-log-refresh" class="btn btn-s">' . _t('刷新') . '</button>';
+        $html .= '</div>';
+        $html .= '</div>';
+        $html .= '<div class="passport-log-batch-actions">';
+        $html .= '<button type="button" id="passport-log-batch-unblock" class="btn btn-s btn-warn" style="display: none;">' . _t('批量解封') . '</button>';
+        $html .= '</div>';
+        $html .= '</div>';
+
+        // 表格
+        $html .= '<table class="typecho-list-table" id="passport-log-table">
+            <colgroup><col width="5%"><col width="20%"><col width="10%"><col width="25%"><col width="25%"><col width="15%"></colgroup>
             <thead><tr>
+                <th><input type="checkbox" id="passport-log-select-all"></th>
                 <th>' . _t('IP 地址') . '</th><th>' . _t('尝试次数') . '</th><th>' . _t('最后尝试时间') . '</th><th>' . _t('状态') . '</th><th>' . _t('操作') . '</th>
             </tr></thead>
             <tbody>';
 
         if (empty($logs)) {
-            $html .= '<tr><td colspan="5"><h6 class="typecho-list-table-title">' . _t('当前没有风险记录') . '</h6></td></tr>';
+            $html .= '<tr><td colspan="6"><h6 class="typecho-list-table-title">' . _t('当前没有风险记录') . '</h6></td></tr>';
         } else {
             $now = time();
             foreach ($logs as $log) {
@@ -326,32 +393,95 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                 $lastAttempt = (int) ($log['last_attempt'] ?? 0);
                 $lockedUntil = (int) ($log['locked_until'] ?? 0);
 
-                $status = '<span style="color: #35a937;">' . _t('安全') . '</span>';
+                $statusClass = 'safe';
+                $statusText = _t('安全');
                 $action = '<span>-</span>';
 
                 if ($lockedUntil > $now) {
                     $remaining_time = $lockedUntil - $now;
                     $remaining_minutes = (int) ceil($remaining_time / 60);
-                    $status = '<span style="color: #ce5252; font-weight: bold;">' . _t('封禁中') . '</span> (' . _t('剩余约') . ' ' . $remaining_minutes . ' ' . _t('分钟') . ')';
-                    $action = '<form method="post" action="' . $actionUrl . '" style="margin:0; padding:0;">' .
+                    $statusClass = 'locked';
+                    $statusText = _t('封禁中') . ' (' . _t('剩余约') . ' ' . $remaining_minutes . ' ' . _t('分钟') . ')';
+                    $action = '<form method="post" action="' . $actionUrl . '" style="margin:0; padding:0;" class="unblock-form" data-ip="' . $ip . '">' .
                               '<input type="hidden" name="unblock_ip" value="' . $ip . '">' .
                               '<button type="submit" class="btn btn-s btn-warn">' . _t('立即解封') . '</button>' .
                               '</form>';
                 } elseif ($lockedUntil > 0) {
-                    $status = '<span style="color: grey;">' . _t('封禁已过期') . '</span>';
+                    $statusClass = 'expired';
+                    $statusText = _t('封禁已过期');
                 }
 
-                $html .= '<tr>' .
+                $html .= '<tr data-status="' . $statusClass . '" data-ip="' . $ip . '">' .
+                         '<td><input type="checkbox" class="passport-log-checkbox" value="' . $ip . '"></td>' .
                          '<td>' . $ip . '</td>' .
                          '<td>' . $attempts . '</td>' .
                          '<td>' . date('Y-m-d H:i:s', $lastAttempt) . '</td>' .
-                         '<td>' . $status . '</td>' .
+                         '<td><span class="passport-log-status passport-log-status-' . $statusClass . '">' . $statusText . '</span></td>' .
                          '<td>' . $action . '</td>' .
                          '</tr>';
             }
         }
 
         $html .= '</tbody></table>';
+
+        // 分页信息
+        if ($total > 0) {
+            $html .= '<div class="passport-log-pagination">';
+            $html .= '<div class="passport-log-pagination-inner">';
+            $html .= '<div class="page-info">' . _t('共 %s 条记录', $total) . '</div>';
+            
+            if ($totalPages > 1) {
+                $html .= '<div class="pagination">';
+                
+                // 上一页
+                if ($page > 1) {
+                    $prevPage = $page - 1;
+                    $html .= '<a href="#" class="page-link" data-page="' . $prevPage . '">&laquo; ' . _t('上一页') . '</a>';
+                }
+                
+                // 页码
+                $startPage = max(1, $page - 2);
+                $endPage = min($totalPages, $page + 2);
+                
+                if ($startPage > 1) {
+                    $html .= '<a href="#" class="page-link" data-page="1">1</a>';
+                    if ($startPage > 2) {
+                        $html .= '<span class="page-ellipsis">...</span>';
+                    }
+                }
+                
+                for ($i = $startPage; $i <= $endPage; $i++) {
+                    $activeClass = $i == $page ? ' active' : '';
+                    $html .= '<a href="#" class="page-link' . $activeClass . '" data-page="' . $i . '">' . $i . '</a>';
+                }
+                
+                if ($endPage < $totalPages) {
+                    if ($endPage < $totalPages - 1) {
+                        $html .= '<span class="page-ellipsis">...</span>';
+                    }
+                    $html .= '<a href="#" class="page-link" data-page="' . $totalPages . '">' . $totalPages . '</a>';
+                }
+                
+                // 下一页
+                if ($page < $totalPages) {
+                    $nextPage = $page + 1;
+                    $html .= '<a href="#" class="page-link" data-page="' . $nextPage . '">' . _t('下一页') . ' &raquo;</a>';
+                }
+                
+                $html .= '</div>';
+            }
+            
+            $html .= '<div class="page-info">' . _t('每页 %s 条', $pageSize) . '</div>';
+            $html .= '</div>';
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+
+        // 添加样式和脚本
+        $html .= self::getLogTableStyles();
+        $html .= self::getLogTableScripts($actionUrl, $pageSize);
+
         return $html;
     }
 
@@ -523,5 +653,693 @@ JS;
         }
 
         $db->query($sql);
+    }
+
+    /**
+     * 获取日志表格的样式
+     *
+     * @return string CSS样式
+     */
+    private static function getLogTableStyles(): string
+    {
+        return <<<CSS
+        <style>
+            .passport-log-toolbar {
+                background: #f5f5f5;
+                padding: 12px 15px;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+                margin-bottom: 15px;
+            }
+            .passport-log-toolbar-inner {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+                align-items: center;
+            }
+            .passport-log-toolbar .toolbar-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .passport-log-toolbar .toolbar-label {
+                color: #666;
+                font-size: 13px;
+                white-space: nowrap;
+            }
+            .passport-log-toolbar input[type="text"],
+            .passport-log-toolbar select {
+                height: 28px;
+                padding: 4px 8px;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                font-size: 13px;
+                color: #333;
+                background: white;
+                transition: all 0.2s;
+            }
+            .passport-log-toolbar input[type="text"]:focus,
+            .passport-log-toolbar select:focus {
+                outline: none;
+                border-color: #5e6db3;
+                box-shadow: 0 0 3px rgba(94, 109, 179, 0.3);
+            }
+            .passport-log-toolbar .btn {
+                height: 28px;
+                padding: 4px 12px;
+                font-size: 13px;
+                line-height: 18px;
+            }
+            .passport-log-pagination {
+                background: #f9f9f9;
+                padding: 10px 15px;
+                border-radius: 4px;
+                border: 1px solid #e5e5e5;
+                margin-top: 15px;
+            }
+            .passport-log-pagination-inner {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .passport-log-pagination .pagination {
+                display: flex;
+                gap: 5px;
+                align-items: center;
+            }
+            .passport-log-pagination .page-link {
+                padding: 4px 10px;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                text-decoration: none;
+                color: #333;
+                background: white;
+                font-size: 12px;
+                transition: all 0.2s;
+                display: inline-block;
+            }
+            .passport-log-pagination .page-link:hover {
+                background: #f0f0f0;
+                border-color: #ccc;
+                text-decoration: none;
+            }
+            .passport-log-pagination .page-link.active {
+                background: #5e6db3;
+                color: white;
+                border-color: #5e6db3;
+            }
+            .passport-log-pagination .page-ellipsis {
+                padding: 4px 8px;
+                color: #999;
+            }
+            .passport-log-pagination .page-info {
+                color: #666;
+                font-size: 12px;
+            }
+            .passport-log-status-safe {
+                color: #35a937;
+                font-weight: 500;
+            }
+            .passport-log-status-locked {
+                color: #ce5252;
+                font-weight: bold;
+            }
+            .passport-log-status-expired {
+                color: #999;
+            }
+            .passport-log-checkbox {
+                cursor: pointer;
+                width: 16px;
+                height: 16px;
+                margin: 0;
+                vertical-align: middle;
+            }
+            .passport-log-table tbody tr:hover {
+                background-color: #f9f9f9;
+            }
+            .passport-log-table tbody tr.selected {
+                background-color: #e8f0fe;
+            }
+            .passport-log-table td {
+                vertical-align: middle;
+            }
+            .passport-log-loading {
+                text-align: center;
+                padding: 40px 20px;
+                color: #666;
+                font-size: 14px;
+            }
+            .passport-log-loading::after {
+                content: '...';
+                animation: dots 1.5s steps(4, end) infinite;
+            }
+            @keyframes dots {
+                0%, 20% { content: '.'; }
+                40% { content: '..'; }
+                60%, 100% { content: '...'; }
+            }
+            .passport-log-batch-actions {
+                margin-top: 10px;
+            }
+            .passport-log-batch-actions .btn {
+                margin-right: 8px;
+            }
+            @media (max-width: 768px) {
+                .passport-log-toolbar-inner {
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+                .passport-log-toolbar .toolbar-group {
+                    flex-wrap: wrap;
+                }
+                .passport-log-toolbar input[type="text"],
+                .passport-log-toolbar select {
+                    flex: 1;
+                    min-width: 120px;
+                }
+                .passport-log-pagination-inner {
+                    flex-direction: column;
+                    align-items: stretch;
+                    text-align: center;
+                }
+                .passport-log-pagination .pagination {
+                    justify-content: center;
+                }
+            }
+        </style>
+CSS;
+    }
+
+    /**
+     * 获取日志表格的 JavaScript 脚本
+     *
+     * @param string $actionUrl 解封操作的目标 URL
+     * @param int $pageSize 每页显示数量
+     * @return string JavaScript代码
+     */
+    private static function getLogTableScripts(string $actionUrl, int $pageSize): string
+    {
+        return <<<JS
+        <script>
+        (function() {
+            var currentPage = 1;
+            var currentFilter = 'all';
+            var currentSearch = '';
+            var selectedIps = [];
+            var isLoading = false;
+            
+            var actionUrl = '$actionUrl';
+            var pageSize = $pageSize;
+            
+            var console = window.console || {
+                log: function() {},
+                error: function() {},
+                warn: function() {}
+            };
+            
+            function init() {
+                try {
+                    initEventListeners();
+                } catch (e) {
+                    console.error('初始化失败:', e);
+                }
+            }
+            
+            function initEventListeners() {
+                var searchInput = document.getElementById('passport-log-search');
+                var filterSelect = document.getElementById('passport-log-filter');
+                var refreshBtn = document.getElementById('passport-log-refresh');
+                var selectAllCheckbox = document.getElementById('passport-log-select-all');
+                var batchUnblockBtn = document.getElementById('passport-log-batch-unblock');
+                
+                if (searchInput) {
+                    addEvent(searchInput, 'input', debounce(function() {
+                        currentSearch = this.value.trim();
+                        currentPage = 1;
+                        loadLogs();
+                    }, 300));
+                }
+                
+                if (filterSelect) {
+                    addEvent(filterSelect, 'change', function() {
+                        currentFilter = this.value;
+                        currentPage = 1;
+                        loadLogs();
+                    });
+                }
+                
+                if (refreshBtn) {
+                    addEvent(refreshBtn, 'click', function(e) {
+                        if (e) e.preventDefault();
+                        currentPage = 1;
+                        currentSearch = '';
+                        currentFilter = 'all';
+                        if (searchInput) searchInput.value = '';
+                        if (filterSelect) filterSelect.value = 'all';
+                        loadLogs();
+                    });
+                }
+                
+                if (selectAllCheckbox) {
+                    addEvent(selectAllCheckbox, 'change', function() {
+                        var checkboxes = document.querySelectorAll('.passport-log-checkbox');
+                        for (var i = 0; i < checkboxes.length; i++) {
+                            checkboxes[i].checked = this.checked;
+                            toggleRowSelection(checkboxes[i]);
+                        }
+                        updateBatchButton();
+                    });
+                }
+                
+                var checkboxes = document.querySelectorAll('.passport-log-checkbox');
+                for (var i = 0; i < checkboxes.length; i++) {
+                    if (!checkboxes[i].id || checkboxes[i].id !== 'passport-log-select-all') {
+                        addEvent(checkboxes[i], 'change', function() {
+                            toggleRowSelection(this);
+                            updateBatchButton();
+                        });
+                    }
+                }
+                
+                if (batchUnblockBtn) {
+                    addEvent(batchUnblockBtn, 'click', batchUnblock);
+                }
+                
+                bindPaginationLinks();
+                bindUnblockForms();
+            }
+            
+            function bindPaginationLinks() {
+                var links = document.querySelectorAll('.page-link');
+                for (var i = 0; i < links.length; i++) {
+                    addEvent(links[i], 'click', function(e) {
+                        if (e) e.preventDefault();
+                        var page = parseInt(this.getAttribute('data-page'));
+                        if (page && !isNaN(page) && page !== currentPage) {
+                            currentPage = page;
+                            loadLogs();
+                        }
+                    });
+                }
+            }
+            
+            function bindUnblockForms() {
+                var forms = document.querySelectorAll('.unblock-form');
+                for (var i = 0; i < forms.length; i++) {
+                    addEvent(forms[i], 'submit', function(e) {
+                        if (e) e.preventDefault();
+                        var ip = this.getAttribute('data-ip');
+                        if (ip) {
+                            unblockIp(ip, this);
+                        }
+                    });
+                }
+            }
+            
+            function addEvent(element, eventType, handler) {
+                if (!element) return;
+                
+                if (element.addEventListener) {
+                    element.addEventListener(eventType, handler, false);
+                } else if (element.attachEvent) {
+                    element.attachEvent('on' + eventType, handler);
+                } else {
+                    element['on' + eventType] = handler;
+                }
+            }
+            
+            function toggleRowSelection(checkbox) {
+                var row = checkbox.closest ? checkbox.closest('tr') : getParentByTagName(checkbox, 'tr');
+                if (row) {
+                    if (checkbox.checked) {
+                        addClass(row, 'selected');
+                    } else {
+                        removeClass(row, 'selected');
+                    }
+                }
+            }
+            
+            function updateBatchButton() {
+                var checkboxes = document.querySelectorAll('.passport-log-checkbox:checked');
+                var batchBtn = document.getElementById('passport-log-batch-unblock');
+                if (batchBtn) {
+                    batchBtn.style.display = checkboxes.length > 0 ? 'inline-block' : 'none';
+                }
+            }
+            
+            function loadLogs() {
+                if (isLoading) return;
+                isLoading = true;
+                
+                var container = document.getElementById('passport-log-container');
+                if (!container) {
+                    isLoading = false;
+                    return;
+                }
+                
+                var tbody = container.querySelector('tbody');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="passport-log-loading">加载中</td></tr>';
+                }
+                
+                var params = 'action=passport_load_logs' +
+                    '&page=' + encodeURIComponent(currentPage) +
+                    '&filter=' + encodeURIComponent(currentFilter) +
+                    '&search=' + encodeURIComponent(currentSearch) +
+                    '&pageSize=' + encodeURIComponent(pageSize);
+                
+                sendAjaxRequest(actionUrl, params, function(data) {
+                    isLoading = false;
+                    if (data && data.success) {
+                        updateTable(data.data);
+                    } else {
+                        showError(data && data.message ? data.message : '加载失败');
+                    }
+                }, function(error) {
+                    isLoading = false;
+                    showError('网络错误：' + (error && error.message ? error.message : '未知错误'));
+                });
+            }
+            
+            function sendAjaxRequest(url, params, successCallback, errorCallback) {
+                var xhr = createXHR();
+                if (!xhr) {
+                    if (errorCallback) {
+                        errorCallback({ message: '浏览器不支持 AJAX' });
+                    }
+                    return;
+                }
+                
+                xhr.open('POST', url, true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                var data = JSON.parse(xhr.responseText);
+                                if (successCallback) {
+                                    successCallback(data);
+                                }
+                            } catch (e) {
+                                if (errorCallback) {
+                                    errorCallback({ message: '解析响应失败: ' + e.message });
+                                }
+                            }
+                        } else {
+                            if (errorCallback) {
+                                errorCallback({ message: '请求失败，状态码: ' + xhr.status });
+                            }
+                        }
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    if (errorCallback) {
+                        errorCallback({ message: '网络错误' });
+                    }
+                };
+                
+                xhr.ontimeout = function() {
+                    if (errorCallback) {
+                        errorCallback({ message: '请求超时' });
+                    }
+                };
+                
+                xhr.timeout = 30000;
+                xhr.send(params);
+            }
+            
+            function createXHR() {
+                var xhr = null;
+                if (window.XMLHttpRequest) {
+                    xhr = new XMLHttpRequest();
+                } else if (window.ActiveXObject) {
+                    try {
+                        xhr = new ActiveXObject('Msxml2.XMLHTTP');
+                    } catch (e) {
+                        try {
+                            xhr = new ActiveXObject('Microsoft.XMLHTTP');
+                        } catch (e) {
+                            xhr = null;
+                        }
+                    }
+                }
+                return xhr;
+            }
+            
+            function updateTable(data) {
+                var container = document.getElementById('passport-log-container');
+                if (!container || !data) return;
+                
+                var tbody = container.querySelector('tbody');
+                if (tbody && data.logs) {
+                    if (!data.logs || data.logs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6"><h6 class="typecho-list-table-title">没有找到匹配的记录</h6></td></tr>';
+                    } else {
+                        var html = '';
+                        for (var i = 0; i < data.logs.length; i++) {
+                            html += renderLogRow(data.logs[i]);
+                        }
+                        tbody.innerHTML = html;
+                    }
+                }
+                
+                var pagination = container.querySelector('.passport-log-pagination');
+                if (pagination && data.pagination) {
+                    var paginationInner = pagination.querySelector('.passport-log-pagination-inner');
+                    if (paginationInner) {
+                        paginationInner.innerHTML = renderPagination(data.pagination);
+                    }
+                }
+                
+                bindPaginationLinks();
+                bindUnblockForms();
+                updateBatchButton();
+            }
+            
+            function renderLogRow(log) {
+                if (!log) return '';
+                
+                var statusClass = 'safe';
+                var statusText = '安全';
+                var action = '<span>-</span>';
+                
+                if (log.locked_until > 0) {
+                    var now = Math.floor(Date.now() / 1000);
+                    if (log.locked_until > now) {
+                        var remaining = log.locked_until - now;
+                        var minutes = Math.ceil(remaining / 60);
+                        statusClass = 'locked';
+                        statusText = '封禁中 (剩余约 ' + minutes + ' 分钟)';
+                        action = '<form method="post" action="' + actionUrl + '" style="margin:0; padding:0;" class="unblock-form" data-ip="' + escapeHtml(log.ip) + '">' +
+                                 '<input type="hidden" name="unblock_ip" value="' + escapeHtml(log.ip) + '">' +
+                                 '<button type="submit" class="btn btn-s btn-warn">立即解封</button>' +
+                                 '</form>';
+                    } else {
+                        statusClass = 'expired';
+                        statusText = '封禁已过期';
+                    }
+                }
+                
+                return '<tr data-status="' + statusClass + '" data-ip="' + escapeHtml(log.ip) + '">' +
+                       '<td><input type="checkbox" class="passport-log-checkbox" value="' + escapeHtml(log.ip) + '"></td>' +
+                       '<td>' + escapeHtml(log.ip) + '</td>' +
+                       '<td>' + (log.attempts || 0) + '</td>' +
+                       '<td>' + formatTimestamp(log.last_attempt) + '</td>' +
+                       '<td><span class="passport-log-status passport-log-status-' + statusClass + '">' + escapeHtml(statusText) + '</span></td>' +
+                       '<td>' + action + '</td>' +
+                       '</tr>';
+            }
+            
+            function renderPagination(pagination) {
+                if (!pagination) return '';
+                
+                var html = '<div class="page-info">共 ' + (pagination.total || 0) + ' 条记录</div>';
+                
+                if (pagination.totalPages > 1) {
+                    html += '<div class="pagination">';
+                    
+                    if (pagination.page > 1) {
+                        html += '<a href="#" class="page-link" data-page="' + (pagination.page - 1) + '">&laquo; 上一页</a>';
+                    }
+                    
+                    var startPage = Math.max(1, pagination.page - 2);
+                    var endPage = Math.min(pagination.totalPages, pagination.page + 2);
+                    
+                    if (startPage > 1) {
+                        html += '<a href="#" class="page-link" data-page="1">1</a>';
+                        if (startPage > 2) {
+                            html += '<span class="page-ellipsis">...</span>';
+                        }
+                    }
+                    
+                    for (var i = startPage; i <= endPage; i++) {
+                        var activeClass = i === pagination.page ? ' active' : '';
+                        html += '<a href="#" class="page-link' + activeClass + '" data-page="' + i + '">' + i + '</a>';
+                    }
+                    
+                    if (endPage < pagination.totalPages) {
+                        if (endPage < pagination.totalPages - 1) {
+                            html += '<span class="page-ellipsis">...</span>';
+                        }
+                        html += '<a href="#" class="page-link" data-page="' + pagination.totalPages + '">' + pagination.totalPages + '</a>';
+                    }
+                    
+                    if (pagination.page < pagination.totalPages) {
+                        html += '<a href="#" class="page-link" data-page="' + (pagination.page + 1) + '">下一页 &raquo;</a>';
+                    }
+                    
+                    html += '</div>';
+                }
+                
+                html += '<div class="page-info">每页 ' + (pagination.pageSize || pageSize) + ' 条</div>';
+                return html;
+            }
+            
+            function unblockIp(ip, form) {
+                var params = 'action=passport_unblock_ip' +
+                    '&ip=' + encodeURIComponent(ip);
+                
+                sendAjaxRequest(actionUrl, params, function(data) {
+                    if (data && data.success) {
+                        loadLogs();
+                    } else {
+                        alert(data && data.message ? data.message : '解封失败');
+                    }
+                }, function(error) {
+                    alert('网络错误：' + (error && error.message ? error.message : '未知错误'));
+                });
+            }
+            
+            function batchUnblock() {
+                var checkboxes = document.querySelectorAll('.passport-log-checkbox:checked');
+                if (!checkboxes || checkboxes.length === 0) {
+                    alert('请选择要解封的 IP');
+                    return;
+                }
+                
+                if (!confirm('确定要解封选中的 ' + checkboxes.length + ' 个 IP 吗？')) {
+                    return;
+                }
+                
+                var ips = [];
+                for (var i = 0; i < checkboxes.length; i++) {
+                    if (checkboxes[i].value) {
+                        ips.push(checkboxes[i].value);
+                    }
+                }
+                
+                var params = 'action=passport_batch_unblock' +
+                    '&ips=' + encodeURIComponent(ips.join(','));
+                
+                sendAjaxRequest(actionUrl, params, function(data) {
+                    if (data && data.success) {
+                        loadLogs();
+                    } else {
+                        alert(data && data.message ? data.message : '批量解封失败');
+                    }
+                }, function(error) {
+                    alert('网络错误：' + (error && error.message ? error.message : '未知错误'));
+                });
+            }
+            
+            function formatTimestamp(timestamp) {
+                if (!timestamp) return '-';
+                
+                var date = new Date(timestamp * 1000);
+                if (isNaN(date.getTime())) return '-';
+                
+                var year = date.getFullYear();
+                var month = padZero(date.getMonth() + 1);
+                var day = padZero(date.getDate());
+                var hours = padZero(date.getHours());
+                var minutes = padZero(date.getMinutes());
+                var seconds = padZero(date.getSeconds());
+                
+                return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+            }
+            
+            function padZero(num) {
+                return num < 10 ? '0' + num : num;
+            }
+            
+            function escapeHtml(text) {
+                if (!text) return '';
+                var div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            function showError(message) {
+                var tbody = document.querySelector('#passport-log-table tbody');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="color: #ce5252; text-align: center; padding: 20px;">' + escapeHtml(message) + '</td></tr>';
+                }
+            }
+            
+            function debounce(func, wait) {
+                var timeout;
+                return function() {
+                    var context = this;
+                    var args = arguments;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(function() {
+                        func.apply(context, args);
+                    }, wait);
+                };
+            }
+            
+            function addClass(element, className) {
+                if (!element) return;
+                if (element.classList) {
+                    element.classList.add(className);
+                } else {
+                    var classes = element.className.split(' ');
+                    if (classes.indexOf(className) === -1) {
+                        classes.push(className);
+                    }
+                    element.className = classes.join(' ');
+                }
+            }
+            
+            function removeClass(element, className) {
+                if (!element) return;
+                if (element.classList) {
+                    element.classList.remove(className);
+                } else {
+                    var classes = element.className.split(' ');
+                    var index = classes.indexOf(className);
+                    if (index !== -1) {
+                        classes.splice(index, 1);
+                    }
+                    element.className = classes.join(' ');
+                }
+            }
+            
+            function getParentByTagName(element, tagName) {
+                if (!element) return null;
+                tagName = tagName.toLowerCase();
+                var parent = element.parentNode;
+                while (parent && parent.tagName) {
+                    if (parent.tagName.toLowerCase() === tagName) {
+                        return parent;
+                    }
+                    parent = parent.parentNode;
+                }
+                return null;
+            }
+            
+            if (document.readyState === 'loading') {
+                addEvent(document, 'DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+        </script>
+JS;
     }
 }

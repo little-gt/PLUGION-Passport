@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM & 小否先生
- * @version 0.1.3
+ * @version 0.1.4
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -72,7 +72,7 @@ class Passport_Widget extends Widget implements ActionInterface
 
     /**
      * [Action 接口实现] 处理后台动作
-     * 目前用于后台手动解封 IP
+     * 目前用于后台手动解封 IP 和 AJAX 日志管理
      *
      * @return void
      * @throws DbException
@@ -83,8 +83,28 @@ class Passport_Widget extends Widget implements ActionInterface
         $this->user->pass('administrator');
         $this->security->protect();
 
-        if ($this->request->isPost() && !empty($this->request->unblock_ip)) {
-            $this->handleUnblockIp((string) $this->request->unblock_ip);
+        if ($this->request->isPost()) {
+            $action = $this->request->get('action');
+
+            switch ($action) {
+                case 'passport_load_logs':
+                    $this->handleLoadLogs();
+                    return;
+
+                case 'passport_unblock_ip':
+                    $this->handleAjaxUnblockIp();
+                    return;
+
+                case 'passport_batch_unblock':
+                    $this->handleBatchUnblock();
+                    return;
+
+                default:
+                    if (!empty($this->request->unblock_ip)) {
+                        $this->handleUnblockIp((string) $this->request->unblock_ip);
+                    }
+                    break;
+            }
         }
 
         $this->response->goBack();
@@ -604,6 +624,192 @@ class Passport_Widget extends Widget implements ActionInterface
         $this->notice->set(_t('IP [%s] 已解封。', htmlspecialchars($ip)), 'success');
     }
 
+    /**
+     * AJAX 加载日志数据
+     *
+     * @return void
+     */
+    private function handleLoadLogs()
+    {
+        $page = max(1, (int) $this->request->get('page', 1));
+        $filter = $this->request->get('filter', 'all');
+        $search = $this->request->get('search', '');
+        $pageSize = max(10, min(100, (int) $this->request->get('pageSize', 25)));
+
+        $prefix = $this->db->getPrefix();
+        $now = time();
+
+        try {
+            $query = $this->db->select()->from("{$prefix}passport_fails");
+
+            // 搜索过滤
+            if (!empty($search)) {
+                $query->where('ip LIKE ?', '%' . $search . '%');
+            }
+
+            // 状态过滤
+            switch ($filter) {
+                case 'locked':
+                    $query->where('locked_until > ?', $now);
+                    break;
+                case 'safe':
+                    $query->where('locked_until = ?', 0);
+                    break;
+                case 'expired':
+                    $query->where('locked_until > ?', 0)
+                          ->where('locked_until < ?', $now);
+                    break;
+            }
+
+            // 获取总数
+            $totalQuery = clone $query;
+            $totalResult = $this->db->fetchRow($totalQuery->select('COUNT(*) as total'));
+            $total = isset($totalResult['total']) ? (int) $totalResult['total'] : 0;
+
+            // 获取分页数据
+            $offset = ($page - 1) * $pageSize;
+            $logs = $this->db->fetchAll($query
+                ->order("{$prefix}passport_fails.last_attempt", Typecho_Db::SORT_DESC)
+                ->limit($pageSize)
+                ->offset($offset));
+
+            $this->response->setStatus(200);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'logs' => $logs,
+                    'pagination' => [
+                        'page' => $page,
+                        'pageSize' => $pageSize,
+                        'total' => $total,
+                        'totalPages' => (int) ceil($total / $pageSize)
+                    ]
+                ]
+            ]);
+        } catch (Exception $e) {
+            $this->response->setStatus(500);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        exit;
+    }
+
+    /**
+     * AJAX 解封单个 IP
+     *
+     * @return void
+     */
+    private function handleAjaxUnblockIp()
+    {
+        $ip = $this->request->get('ip');
+
+        if (!$this->isValidIp($ip)) {
+            $this->response->setStatus(400);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => _t('IP 地址格式不正确。')
+            ]);
+            exit;
+        }
+
+        try {
+            $prefix = $this->db->getPrefix();
+            $this->db->query($this->db->update("{$prefix}passport_fails")
+                ->rows(['locked_until' => 0])
+                ->where('ip = ?', $ip));
+
+            $this->response->setStatus(200);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => _t('IP [%s] 已解封。', htmlspecialchars($ip))
+            ]);
+        } catch (Exception $e) {
+            $this->response->setStatus(500);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        exit;
+    }
+
+    /**
+     * AJAX 批量解封 IP
+     *
+     * @return void
+     */
+    private function handleBatchUnblock()
+    {
+        $ipsString = $this->request->get('ips', '');
+        if (empty($ipsString)) {
+            $this->response->setStatus(400);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => _t('请选择要解封的 IP。')
+            ]);
+            exit;
+        }
+
+        $ips = array_filter(array_map('trim', explode(',', $ipsString)));
+        $validIps = [];
+        $invalidIps = [];
+
+        foreach ($ips as $ip) {
+            if ($this->isValidIp($ip)) {
+                $validIps[] = $ip;
+            } else {
+                $invalidIps[] = $ip;
+            }
+        }
+
+        if (empty($validIps)) {
+            $this->response->setStatus(400);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => _t('没有有效的 IP 地址。')
+            ]);
+            exit;
+        }
+
+        try {
+            $prefix = $this->db->getPrefix();
+            $placeholders = str_repeat('?,', count($validIps) - 1) . '?';
+            
+            $this->db->query($this->db->update("{$prefix}passport_fails")
+                ->rows(['locked_until' => 0])
+                ->where("ip IN ($placeholders)", ...$validIps));
+
+            $message = _t('已成功解封 %d 个 IP。', count($validIps));
+            if (!empty($invalidIps)) {
+                $message .= ' ' . _t('跳过 %d 个无效的 IP。', count($invalidIps));
+            }
+
+            $this->response->setStatus(200);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => true,
+                'message' => $message
+            ]);
+        } catch (Exception $e) {
+            $this->response->setStatus(500);
+            $this->response->setContentType('application/json');
+            echo json_encode([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+        exit;
+    }
+
     // --- 辅助方法 ---
 
     private function isValidIp(string $ip): bool
@@ -773,4 +979,28 @@ class Passport_Widget extends Widget implements ActionInterface
     }
 
     public function execute() {}
+
+    /**
+     * 兼容方法调用处理
+     * 
+     * 用于兼容 Typecho 1.2.1 和 1.3.0 之间的差异
+     * 
+     * @param string $name 方法名
+     * @param array $args 参数
+     * @return mixed
+     * @throws Exception
+     */
+    public function __call(string $name, array $args)
+    {
+        switch ($name) {
+            case 'doForgot':
+                echo Common::url('/passport/forgot', $this->options->index);
+                return;
+            case 'doReset':
+                echo Common::url('/passport/reset', $this->options->index);
+                return;
+            default:
+                throw new Exception("Method {$name} not found");
+        }
+    }
 }

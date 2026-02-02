@@ -4,10 +4,10 @@
 >
 > 插件提供安全的密码找回与重置功能。插件**内置零配置图片验证码**，同时支持多种主流第三方人机验证方式。内置严格的 Token 管理、HMAC 签名机制以及**支持 CDN 环境**的高级防爆破功能。本项目遵循 GPLv2 协议，完全免费开源。
 
-[![项目版本](https://img.shields.io/badge/版本-0.1.3-007EC6?style=flat-square)](https://github.com/little-gt/PLUGION-Passport/)
+[![项目版本](https://img.shields.io/badge/版本-0.1.4-007EC6?style=flat-square)](https://github.com/little-gt/PLUGION-Passport/)
 [![许可证: GPL v2](https://img.shields.io/badge/许可证-GPLv2-blue?style=flat-square)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 [![PHP 版本](https://img.shields.io/badge/PHP-%3E%3D7.2-orange?style=flat-square&logo=php)](https://www.php.net/)
-[![Typecho 版本](https://img.shields.io/badge/Typecho-1.2%2B-orange?style=flat-square&logo=typecho)](https://typecho.org/)
+[![Typecho 版本](https://img.shields.io/badge/Typecho-1.2%2B%20%26%201.3.0-orange?style=flat-square&logo=typecho)](https://typecho.org/)
 [![作者信息](https://img.shields.io/badge/作者-GARFIELDTOM-6f42c1?style=flat-square&logo=github)](https://garfieldtom.cool/)
 
 界面预览：
@@ -31,24 +31,21 @@
 | **高安全令牌机制** | 基于 **HMAC-SHA256** 签名校验，使用**密码学安全随机数**生成令牌，杜绝可预测性和篡改。|
 | **防暴力破解** | 基于 IP 的请求速率限制和自动临时封禁，有效抵御暴力破解和邮件滥用。|
 | **强密码策略** | 强制要求新密码包含大写、小写、数字及特殊字符。|
-| **专业兼容性** | 插件架构遵循 Typecho 最佳实践，兼容 PHP 7.2+ 及 Typecho 1.2+。|
+| **专业兼容性** | 插件架构遵循 Typecho 最佳实践，兼容 PHP 7.2+ 及 Typecho 1.2.1 和 1.3.0。|
 | **可视化管理** | 后台提供风险日志预览和一键解封功能，轻松配置各种找回密码的高级安全功能和邮件模板，提供简单且高度定制化的体验。|
 
 ---
 ## 🚀 近期更新
 
-### 🛠️ 0.1.3 版本更新说明
+### 🛠️ 0.1.4 版本更新说明
 
-本次更新致力于提升**易用性**与**环境兼容性**：
+本次更新致力于提升**安全性**、**用户体验**与**界面美观性**：
 
-*   **新增内置验证码：** 默认启用基于 PHP GD 库生成的图片验证码，**彻底实现零配置开箱即用**，不再强制依赖第三方验证服务。
-*   **IP 策略升级：** 新增 IP 来源选择功能（默认/代理头/自定义头）。完美解决在使用 CDN（如 Cloudflare）或反向代理时，因无法获取真实 IP 导致限流误判的问题。
-*   **交互体验优化：** 重构通知系统，封禁提示支持实时倒计时；前端页面适配 Typecho 原生风格。
-*   **底层重构：** 规范化代码结构与注释，增强数据表操作的健壮性（防止重激活丢失数据）。
-
-### 🔮 未来规划
-
- - 增强 IP 请求的防爆破功能的可视化交互界面功能
+*   **IP 拦截功能增强：** 新增后台 IP 拦截管理功能，支持查看请求日志、一键解封 IP、批量操作、记录保存时长配置等，提供更强大的防暴力破解能力。
+*   **Typecho 1.3.0 兼容：** 完整兼容 Typecho 1.2.1 和 1.3.0 两个版本，确保在不同环境下都能正常运行。
+*   **全新扁平化设计：** 密码找回页面采用独立于 Typecho，采用完全扁平化设计，移除所有圆角和阴影效果，呈现简洁现代的视觉风格。
+*   **宽屏自适应优化：** 针对大屏幕设备（1920px+、2560px+）优化布局，自动调整容器宽度和内边距，提供更好的视觉体验。
+*   **交互体验优化：** 简化按钮和输入框的交互效果，使用背景色变化替代位移和阴影，提供更流畅的用户体验。
 
 ---
 

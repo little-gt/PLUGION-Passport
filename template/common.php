@@ -82,3 +82,22 @@ if (strpos($version, '/') !== false) {
         $suffixVersion = $parts[1];
     }
 }
+
+// --- 4. 版本兼容性辅助函数 ---
+
+/**
+ * 生成路由 URL（兼容 Typecho 1.2.1 和 1.3.0）
+ * 
+ * 在 Typecho 1.2.1 中，Options 类通过 __call() 魔术方法处理未定义的方法
+ * 在 Typecho 1.3.0 中，Options 类的 __call() 实现为 echo $this->currentConfig[$name]
+ * 
+ * 为了确保兼容性，我们使用 Common::url() 直接生成路由 URL
+ * 
+ * @param string $route 路由路径，如 '/passport/forgot'
+ * @return string 完整的 URL
+ */
+function passport_route_url(string $route): string
+{
+    global $options;
+    return \Typecho\Common::url($route, $options->index);
+}
