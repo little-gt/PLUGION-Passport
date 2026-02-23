@@ -4,7 +4,7 @@
 >
 > 插件提供安全的密码找回与重置功能。插件**内置零配置图片验证码**，同时支持多种主流第三方人机验证方式。内置严格的 Token 管理、HMAC 签名机制以及**支持 CDN 环境**的高级防爆破功能。本项目遵循 GPLv2 协议，完全免费开源。
 
-[![项目版本](https://img.shields.io/badge/版本-0.1.5-007EC6?style=flat-square)](https://github.com/little-gt/PLUGION-Passport/)
+[![项目版本](https://img.shields.io/badge/版本-0.1.6-007EC6?style=flat-square)](https://github.com/little-gt/PLUGION-Passport/)
 [![许可证: GPL v2](https://img.shields.io/badge/许可证-GPLv2-blue?style=flat-square)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 [![PHP 版本](https://img.shields.io/badge/PHP-%3E%3D7.2-orange?style=flat-square&logo=php)](https://www.php.net/)
 [![Typecho 版本](https://img.shields.io/badge/Typecho-1.2%2B%20%26%201.3.0-orange?style=flat-square&logo=typecho)](https://typecho.org/)
@@ -37,15 +37,13 @@
 ---
 ## 🚀 近期更新
 
-### 🛠️ 0.1.5 版本更新说明
+### 🛠️ 0.1.6 版本更新说明
 
 本次更新为常规版本维护，包含多项功能增强和安全优化：
 
-*   **新增密码重置记录展示：** 后台配置页面新增"密码重置历史记录"功能，支持查看所有密码重置请求记录，包括用户ID、邮箱、Token（脱敏显示）、创建时间、状态等信息，方便管理员进行安全审计和问题排查。
-*   **Token机制优化：** 重构了Token生成机制，采用 **UID + 时间戳 + 32位随机字符串** 的组合进行 SHA256 哈希，确保Token的唯一性和不可预测性。同时优化了Token复用逻辑，同一用户在24小时内多次申请密码重置时，将复用已有的未使用Token，避免数据库冗余。
-*   **安全修复：** 修复了原有Token机制中存在的极小概率问题，即Token可能重复使用但无法被检测出来。新的机制通过引入时间因素和强随机数，彻底杜绝了此类安全隐患。
-*   **Token清理自定义配置：** 新增"密码重置历史保留天数"配置项，允许管理员自定义已使用和过期Token的保留时间（默认30天），设置为0则永久保留，满足不同场景的审计需求。
-*   **文档同步：** 更新 README.md 和 SECURITY.md 文件，确保文档与代码版本一致。
+* 升级 PHPMailer 到最新版本
+
+* 增强内置验证码的比较安全性，防御时序漏洞
 
 ---
 

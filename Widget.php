@@ -611,7 +611,8 @@ class Passport_Widget extends Widget implements ActionInterface
             return false;
         }
 
-        if ($inputCode !== $sessionCode) {
+        // 使用常量时间比较防止时序攻击
+        if (!hash_equals($sessionCode, $inputCode)) {
             return false;
         }
 
