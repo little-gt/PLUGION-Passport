@@ -4,11 +4,11 @@
  * 重置密码页面模板
  * 用户点击邮件链接后，输入新密码的页面。
  * @package Passport
- * @version 0.1.5
+ * @version 1.0.1
  */
 
 // 导入公共变量和初始化
-include 'common.php';
+include 'partial/common.php';
 
 /** @var \Widget\Options $options */
 /** @var \Widget\Menu $menu */
@@ -27,328 +27,10 @@ $geetestCaptchaId = htmlspecialchars((string) ($this->config->captchaIdGeetest ?
 $token = htmlspecialchars((string) ($this->request->token ?? ''));
 $signature = htmlspecialchars((string) ($this->request->signature ?? ''));
 
-include 'header.php';
+include 'partial/header.php';
+// 引入静态资源
+include 'partial/resource.php';
 ?>
-    <style>
-        :root {
-            --passport-primary: #467b96;
-            --passport-primary-light: #5a8bb3;
-            --passport-primary-dark: #3a6378;
-            --passport-bg-light: #f8f9fa;
-            --passport-bg-dark: #1a1d21;
-            --passport-card-bg-light: #ffffff;
-            --passport-card-bg-dark: #252a30;
-            --passport-text-light: #2c3e50;
-            --passport-text-dark: #e8eaed;
-            --passport-border-light: #e1e4e8;
-            --passport-border-dark: #374151;
-            --passport-input-bg-light: #f8f9fa;
-            --passport-input-bg-dark: #1f2429;
-            --passport-placeholder-light: #9ca3af;
-            --passport-placeholder-dark: #6b7280;
-            --passport-success-light: #10b981;
-            --passport-success-dark: #059669;
-            --passport-error-light: #ef4444;
-            --passport-error-dark: #dc2626;
-            --passport-warning-light: #f59e0b;
-            --passport-warning-dark: #d97706;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --passport-bg: var(--passport-bg-dark);
-                --passport-card-bg: var(--passport-card-bg-dark);
-                --passport-text: var(--passport-text-dark);
-                --passport-border: var(--passport-border-dark);
-                --passport-input-bg: var(--passport-input-bg-dark);
-                --passport-placeholder: var(--passport-placeholder-dark);
-                --passport-success: var(--passport-success-dark);
-                --passport-error: var(--passport-error-dark);
-                --passport-warning: var(--passport-warning-dark);
-            }
-        }
-
-        @media (prefers-color-scheme: light) {
-            :root {
-                --passport-bg: var(--passport-bg-light);
-                --passport-card-bg: var(--passport-card-bg-light);
-                --passport-text: var(--passport-text-light);
-                --passport-border: var(--passport-border-light);
-                --passport-input-bg: var(--passport-input-bg-light);
-                --passport-placeholder: var(--passport-placeholder-light);
-                --passport-success: var(--passport-success-light);
-                --passport-error: var(--passport-error-light);
-                --passport-warning: var(--passport-warning-light);
-            }
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-            background-color: var(--passport-bg);
-            color: var(--passport-text);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        .passport-container {
-            width: 100%;
-            max-width: 440px;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        @media (min-width: 1920px) {
-            .passport-container {
-                max-width: 520px;
-                padding: 24px;
-            }
-        }
-
-        @media (min-width: 2560px) {
-            .passport-container {
-                max-width: 600px;
-                padding: 32px;
-            }
-        }
-
-        .passport-logo {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .passport-logo h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 600;
-            color: var(--passport-primary);
-            letter-spacing: -0.5px;
-        }
-
-        .passport-logo h1 a {
-            text-decoration: none;
-            color: inherit;
-            transition: opacity 0.2s ease;
-        }
-
-        .passport-logo h1 a:hover {
-            opacity: 0.8;
-        }
-
-        .passport-card {
-            background-color: var(--passport-card-bg);
-            padding: 40px;
-            transition: background-color 0.3s ease;
-            border: 1px solid var(--passport-border);
-        }
-
-        .passport-title {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-
-        .passport-title h2 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: 600;
-            color: var(--passport-text);
-        }
-
-        .passport-form {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        .passport-form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .passport-label {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--passport-text);
-            margin: 0;
-        }
-
-        .passport-label.required::after {
-            content: " *";
-            color: var(--passport-error);
-            margin-left: 2px;
-        }
-
-        .passport-input {
-            width: 100%;
-            height: 48px;
-            padding: 0 16px;
-            font-size: 15px;
-            color: var(--passport-text);
-            background-color: var(--passport-input-bg);
-            border: 2px solid var(--passport-border);
-            box-sizing: border-box;
-            transition: all 0.2s ease;
-            outline: none;
-        }
-
-        .passport-input::placeholder {
-            color: var(--passport-placeholder);
-        }
-
-        .passport-input:focus {
-            border-color: var(--passport-primary);
-            background-color: var(--passport-card-bg);
-        }
-
-        .passport-input:hover {
-            border-color: var(--passport-primary-light);
-        }
-
-        .passport-description {
-            font-size: 13px;
-            color: var(--passport-placeholder);
-            margin: 4px 0 0 0;
-            line-height: 1.5;
-        }
-
-        .passport-captcha {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .passport-captcha-input {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .passport-captcha-img {
-            height: 48px;
-            border: 2px solid var(--passport-border);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            flex-shrink: 0;
-        }
-
-        .passport-captcha-img:hover {
-            border-color: var(--passport-primary);
-        }
-
-        .passport-btn {
-            width: 100%;
-            height: 48px;
-            padding: 0 24px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #ffffff;
-            background-color: var(--passport-primary);
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            outline: none;
-            margin-top: 8px;
-        }
-
-        .passport-btn:hover {
-            background-color: var(--passport-primary-light);
-        }
-
-        .passport-btn:active {
-            background-color: var(--passport-primary-dark);
-        }
-
-        .passport-links {
-            text-align: center;
-            margin-top: 32px;
-            padding-top: 24px;
-            border-top: 1px solid var(--passport-border);
-        }
-
-        .passport-links a {
-            color: var(--passport-primary);
-            text-decoration: none;
-            font-size: 14px;
-            transition: color 0.2s ease;
-        }
-
-        .passport-links a:hover {
-            color: var(--passport-primary-light);
-            text-decoration: underline;
-        }
-
-        .passport-links span {
-            color: var(--passport-placeholder);
-            margin: 0 8px;
-        }
-
-        .passport-notice {
-            padding: 12px 16px;
-            margin-bottom: 24px;
-            font-size: 14px;
-            line-height: 1.5;
-            border: 1px solid;
-        }
-
-        .passport-notice.success {
-            background-color: rgba(16, 185, 129, 0.1);
-            color: var(--passport-success);
-            border-color: var(--passport-success);
-        }
-
-        .passport-notice.error {
-            background-color: rgba(239, 68, 68, 0.1);
-            color: var(--passport-error);
-            border-color: var(--passport-error);
-        }
-
-        .passport-notice.warning {
-            background-color: rgba(245, 158, 11, 0.1);
-            color: var(--passport-warning);
-            border-color: var(--passport-warning);
-        }
-
-        .typecho-logo,
-        .typecho-table-wrap,
-        .typecho-page-title,
-        .typecho-option,
-        .typecho-option-submit,
-        .more-link {
-            display: none !important;
-        }
-
-        .body.container {
-            display: none !important;
-        }
-
-        .passport-hidden {
-            display: none;
-        }
-
-        @media (max-width: 480px) {
-            .passport-container {
-                padding: 16px;
-            }
-
-            .passport-card {
-                padding: 32px 24px;
-            }
-
-            .passport-title h2 {
-                font-size: 20px;
-            }
-
-            .passport-input,
-            .passport-btn {
-                height: 44px;
-            }
-        }
-    </style>
 
     <div class="passport-container">
         <div class="passport-logo">
@@ -386,11 +68,7 @@ include 'header.php';
                         <label class="passport-label required" for="captcha-input"><?php _e('验证码'); ?></label>
                         <div class="passport-captcha">
                             <input type="text" name="captcha" id="captcha-input" class="passport-input passport-captcha-input" required placeholder="<?php _e('请输入验证码'); ?>" autocomplete="off">
-                            <img src="<?php $options->index('/passport/captcha'); ?>"
-                                 class="passport-captcha-img"
-                                 alt="<?php _e('验证码'); ?>"
-                                 title="<?php _e('点击图片刷新验证码'); ?>"
-                                 onclick="this.src='<?php $options->index('/passport/captcha'); ?>?'+Math.random();">
+                            <img src="<?php $options->index('/passport/captcha'); ?>" class="passport-captcha-img" alt="<?php _e('验证码'); ?>" title="<?php _e('点击图片刷新验证码'); ?>" onclick="refreshCaptcha(this);">
                         </div>
                         <p class="passport-description"><?php _e('请输入图片中的字符，不区分大小写'); ?></p>
                     </div>
@@ -430,7 +108,54 @@ include __ADMIN_DIR__ . '/common-js.php';
 
 <?php // --- 按需加载第三方 CAPTCHA 脚本 --- ?>
 
-<?php if ($captchaType === 'recaptcha' && !empty($recaptchaSiteKey)): ?>
+<?php if ($captchaType === 'default'): ?>
+    <script>
+        // 验证码刷新功能
+        function refreshCaptcha(imgElement) {
+            // 防止重复点击
+            if (imgElement.classList.contains('refreshing')) {
+                return;
+            }
+            
+            // 添加刷新动画
+            imgElement.classList.add('refreshing');
+            imgElement.style.opacity = '0.5';
+            imgElement.style.transform = 'rotate(180deg)';
+            imgElement.style.transition = 'all 0.3s ease';
+            
+            // 刷新验证码
+            imgElement.src = imgElement.src.split('?')[0] + '?' + Math.random();
+            
+            // 图片加载完成后移除动画
+            imgElement.onload = function() {
+                setTimeout(() => {
+                    imgElement.classList.remove('refreshing');
+                    imgElement.style.opacity = '1';
+                    imgElement.style.transform = 'rotate(0deg)';
+                }, 300);
+            };
+            
+            // 图片加载失败也移除动画
+            imgElement.onerror = function() {
+                setTimeout(() => {
+                    imgElement.classList.remove('refreshing');
+                    imgElement.style.opacity = '1';
+                    imgElement.style.transform = 'rotate(0deg)';
+                }, 300);
+            };
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // 为验证码图片添加点击事件
+            const captchaImgs = document.querySelectorAll('.passport-captcha-img');
+            captchaImgs.forEach(img => {
+                img.addEventListener('click', function() {
+                    refreshCaptcha(this);
+                });
+            });
+        });
+    </script>
+<?php elseif ($captchaType === 'recaptcha' && !empty($recaptchaSiteKey)): ?>
     <script src="https://www.recaptcha.net/recaptcha/api.js" async defer></script>
 <?php elseif ($captchaType === 'hcaptcha' && !empty($hcaptchaSiteKey)): ?>
     <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
