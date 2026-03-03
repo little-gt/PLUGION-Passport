@@ -262,7 +262,7 @@ class Passport_Widget extends Widget implements ActionInterface
         }
         
         // 导入模板（GET 请求或 POST 处理后重定向回来）
-        require_once 'template/forgot.php';
+        require_once 'Template/forgot.php';
     }
 
     /**
@@ -361,7 +361,7 @@ class Passport_Widget extends Widget implements ActionInterface
         }
         
         // 导入模板（GET 请求或 POST 处理后重定向回来）
-        require_once 'template/reset.php';
+        require_once 'Template/reset.php';
     }
 
     /**
