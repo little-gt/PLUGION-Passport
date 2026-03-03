@@ -350,7 +350,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         min-width: 280px;
         max-width: 400px;
         opacity: 0;
-        transform: translateY(-10px);
+        transform: translateX(100px);
         animation: passkeySlideIn 0.3s ease forwards;
         border: 1px solid;
     }
@@ -446,22 +446,22 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
     @keyframes passkeySlideIn {
         from {
             opacity: 0;
-            transform: translateY(-10px);
+            transform: translateX(100px);
         }
         to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateX(0);
         }
     }
 
     @keyframes passkeySlideOut {
         from {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateX(0);
         }
         to {
             opacity: 0;
-            transform: translateY(-10px);
+            transform: translateX(100px);
         }
     }
 
