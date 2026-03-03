@@ -12,19 +12,12 @@
 // 严格安全检查: 防止文件被直接访问。
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
-// --- 1. 核心常量定义 ---
+// --- 1. Typecho Widget 初始化 ---
 
-// 确保核心常量已定义，表明当前环境是 Typecho 后台环境或需要后台组件支持的环境。
-if (!defined('__TYPECHO_ADMIN__')) {
-    define('__TYPECHO_ADMIN__', true);
+// 确保 Session 已启动
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
-
-// 定义后台目录的完整路径（依赖于 Typecho 核心的 __TYPECHO_ADMIN_DIR__）
-if (!defined('__ADMIN_DIR__')) {
-    define('__ADMIN_DIR__', __TYPECHO_ROOT_DIR__ . (defined('__TYPECHO_ADMIN_DIR__') ? __TYPECHO_ADMIN_DIR__ : '/admin/'));
-}
-
-// --- 2. Typecho Widget 初始化 ---
 
 try {
     /**
@@ -52,38 +45,7 @@ Typecho_Widget::widget('Widget_Options')->to($options);
  */
 Typecho_Widget::widget('Widget_Security')->to($security);
 
-/**
- * 尝试初始化并获取 Typecho 后台菜单 Widget。
- * 主要用于获取页面标题 ($menu->title) 或生成后台导航结构。
- *
- * @var \Widget\Menu $menu
- */
-Typecho_Widget::widget('Widget_Menu')->to($menu);
-
-// --- 3. 版本号解析与兼容性处理 ---
-
-/**
- * 获取 Typecho 版本号
- * 格式可能是 "1.2.1/17.10.27" (带构建日期) 或 "1.3.0" (纯版本号)
- */
-$version = $options->version;
-
-// 初始化前后缀变量
-$prefixVersion = $version;
-$suffixVersion = $version;
-
-// 尝试解析带斜杠的旧版/开发版格式
-if (strpos($version, '/') !== false) {
-    $parts = explode('/', $version, 2);
-    $prefixVersion = $parts[0];
-    
-    // 确保后缀存在且不为空，否则回退到前缀
-    if (!empty($parts[1])) {
-        $suffixVersion = $parts[1];
-    }
-}
-
-// --- 4. 版本兼容性辅助函数 ---
+// --- 2. 辅助函数 ---
 
 /**
  * 生成路由 URL（兼容 Typecho 1.2.1 和 1.3.0）

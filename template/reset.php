@@ -11,10 +11,9 @@
 include 'partial/common.php';
 
 /** @var \Widget\Options $options */
-/** @var \Widget\Menu $menu */
 
 // 设置页面标题
-$menu->title = _t('重置密码');
+$menuTitle = _t('重置密码');
 
 // 从配置中安全获取 CAPTCHA 相关的变量，并进行 HTML 转义
 // 默认值设为 'default' (内置图片验证码)
@@ -42,8 +41,6 @@ include 'partial/resource.php';
                 <h2><?php _e('重置密码'); ?></h2>
             </div>
 
-            <?php $this->notice->render(); ?>
-
             <form action="<?php echo passport_route_url('/passport/reset'); ?>" method="post" enctype="application/x-www-form-urlencoded" class="passport-form">
 
                 <input type="hidden" name="token" value="<?php echo $token; ?>">
@@ -68,7 +65,10 @@ include 'partial/resource.php';
                         <label class="passport-label required" for="captcha-input"><?php _e('验证码'); ?></label>
                         <div class="passport-captcha">
                             <input type="text" name="captcha" id="captcha-input" class="passport-input passport-captcha-input" required placeholder="<?php _e('请输入验证码'); ?>" autocomplete="off">
-                            <img src="<?php $options->index('/passport/captcha'); ?>" class="passport-captcha-img" alt="<?php _e('验证码'); ?>" title="<?php _e('点击图片刷新验证码'); ?>" onclick="refreshCaptcha(this);">
+                            <div class="passport-captcha-wrapper">
+                                <div class="passport-captcha-loader active"></div>
+                                <img class="passport-captcha-img loading" alt="<?php _e('验证码'); ?>" title="<?php _e('点击图片刷新验证码'); ?>" onclick="refreshCaptcha(this);">
+                            </div>
                         </div>
                         <p class="passport-description"><?php _e('请输入图片中的字符，不区分大小写'); ?></p>
                     </div>
@@ -101,11 +101,6 @@ include 'partial/resource.php';
         </div>
     </div>
 
-<?php
-// Typecho 后台的公共 JS 文件
-include __ADMIN_DIR__ . '/common-js.php';
-?>
-
 <?php // --- 按需加载第三方 CAPTCHA 脚本 --- ?>
 
 <?php if ($captchaType === 'default'): ?>
@@ -117,42 +112,36 @@ include __ADMIN_DIR__ . '/common-js.php';
                 return;
             }
             
-            // 添加刷新动画
-            imgElement.classList.add('refreshing');
-            imgElement.style.opacity = '0.5';
-            imgElement.style.transform = 'rotate(180deg)';
-            imgElement.style.transition = 'all 0.3s ease';
+            const wrapper = imgElement.parentElement;
+            const loader = wrapper.querySelector('.passport-captcha-loader');
+            
+            // 显示加载指示器
+            imgElement.classList.add('refreshing', 'loading');
+            loader.classList.add('active');
             
             // 刷新验证码
-            imgElement.src = imgElement.src.split('?')[0] + '?' + Math.random();
+            const baseUrl = imgElement.src ? imgElement.src.split('?')[0] : '<?php $options->index("/passport/captcha"); ?>';
+            imgElement.src = baseUrl + '?' + Math.random();
             
-            // 图片加载完成后移除动画
+            // 图片加载完成后隐藏加载指示器
             imgElement.onload = function() {
-                setTimeout(() => {
-                    imgElement.classList.remove('refreshing');
-                    imgElement.style.opacity = '1';
-                    imgElement.style.transform = 'rotate(0deg)';
-                }, 300);
+                imgElement.classList.remove('refreshing', 'loading');
+                loader.classList.remove('active');
             };
             
-            // 图片加载失败也移除动画
+            // 图片加载失败也隐藏加载指示器
             imgElement.onerror = function() {
-                setTimeout(() => {
-                    imgElement.classList.remove('refreshing');
-                    imgElement.style.opacity = '1';
-                    imgElement.style.transform = 'rotate(0deg)';
-                }, 300);
+                imgElement.classList.remove('refreshing', 'loading');
+                loader.classList.remove('active');
             };
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // 为验证码图片添加点击事件
-            const captchaImgs = document.querySelectorAll('.passport-captcha-img');
-            captchaImgs.forEach(img => {
-                img.addEventListener('click', function() {
-                    refreshCaptcha(this);
-                });
-            });
+            const captchaImg = document.querySelector('.passport-captcha-img');
+            if (captchaImg) {
+                // 首次加载验证码
+                refreshCaptcha(captchaImg);
+            }
         });
     </script>
 <?php elseif ($captchaType === 'recaptcha' && !empty($recaptchaSiteKey)): ?>
@@ -186,7 +175,5 @@ include __ADMIN_DIR__ . '/common-js.php';
     </script>
 <?php endif; ?>
 
-<?php
-// Typecho 后台的页脚文件
-include __ADMIN_DIR__ . '/footer.php';
-?>
+</body>
+</html>

@@ -30,7 +30,6 @@ use Typecho\Http\Client\Exception as HttpClientException;
 use Typecho\Widget\Exception as WidgetException;
 use Utils\PasswordHash;
 use Widget\ActionInterface;
-use Widget\Notice;
 
 class Passport_Widget extends Widget implements ActionInterface
 {
@@ -43,11 +42,6 @@ class Passport_Widget extends Widget implements ActionInterface
      * @var mixed 插件私有配置
      */
     private $config;
-
-    /**
-     * @var Notice 通知组件
-     */
-    private $notice;
 
     /**
      * @var Typecho_Db 数据库实例
@@ -64,10 +58,10 @@ class Passport_Widget extends Widget implements ActionInterface
     public function __construct($request, $response, $params = NULL)
     {
         parent::__construct($request, $response, $params);
-        $this->notice = Notice::alloc();
         $this->options = Widget::widget('Widget_Options');
         $this->config = $this->options->plugin('Passport');
         $this->db = Typecho_Db::get();
+        $this->initSession();
     }
 
     /**
@@ -180,9 +174,6 @@ class Passport_Widget extends Widget implements ActionInterface
      */
     public function doForgot()
     {
-        // 导入模板
-        require_once 'template/forgot.php';
-
         // 清理数据库中的过期令牌
         $this->cleanTokens();
 
@@ -194,12 +185,14 @@ class Passport_Widget extends Widget implements ActionInterface
                 // 2. 表单验证
                 if ($error = $this->forgotForm()->validate()) {
                     $this->pushNotice($error, 'error');
+                    $this->response->redirect(Common::url('/passport/forgot', $this->options->index));
                     return;
                 }
 
-                // 4. 人机验证
+                // 3. 人机验证
                 if (!$this->verifyCaptcha()) {
                     $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
+                    $this->response->redirect(Common::url('/passport/forgot', $this->options->index));
                     return;
                 }
 
@@ -258,8 +251,18 @@ class Passport_Widget extends Widget implements ActionInterface
                 } else {
                     $this->pushNotice($e->getMessage(), 'error');
                 }
+                // 重定向回当前页面以显示通知
+                $this->response->redirect(Common::url('/passport/forgot', $this->options->index));
+                return;
             }
+            
+            // 成功处理后重定向回当前页面以显示通知
+            $this->response->redirect(Common::url('/passport/forgot', $this->options->index));
+            return;
         }
+        
+        // 导入模板（GET 请求或 POST 处理后重定向回来）
+        require_once 'template/forgot.php';
     }
 
     /**
@@ -267,7 +270,6 @@ class Passport_Widget extends Widget implements ActionInterface
      */
     public function doReset()
     {
-        require_once 'template/reset.php';
         $this->cleanTokens();
 
         // 获取参数
@@ -307,6 +309,8 @@ class Passport_Widget extends Widget implements ActionInterface
                 // 2. 表单校验
                 if ($error = $this->resetForm()->validate()) {
                     $this->pushNotice($error, 'error');
+                    // 重定向回当前页面（带 token 和 signature）
+                    $this->response->redirect(Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index));
                     return;
                 }
 
@@ -315,12 +319,14 @@ class Passport_Widget extends Widget implements ActionInterface
                 $complexityCheck = $this->validatePasswordComplexity($password);
                 if ($complexityCheck !== true) {
                     $this->pushNotice($complexityCheck, 'error');
+                    $this->response->redirect(Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index));
                     return;
                 }
 
                 // 4. 人机验证
                 if (!$this->verifyCaptcha()) {
                     $this->pushNotice(_t('验证码错误或已失效，请重试。'), 'error');
+                    $this->response->redirect(Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index));
                     return;
                 }
 
@@ -340,6 +346,7 @@ class Passport_Widget extends Widget implements ActionInterface
 
                 $this->pushNotice(_t('密码重置成功，请使用新密码登录。'), 'success');
                 $this->response->redirect($this->options->loginUrl);
+                return;
 
             } catch (WidgetException $e) {
                 if ($e->getCode() === 429) {
@@ -347,16 +354,33 @@ class Passport_Widget extends Widget implements ActionInterface
                 } else {
                     $this->pushNotice($e->getMessage(), 'error');
                 }
+                // 重定向回当前页面（带 token 和 signature）
+                $this->response->redirect(Common::url('/passport/reset?token=' . urlencode($token) . '&signature=' . urlencode($signature), $this->options->index));
+                return;
             }
+        }
+        
+        // 导入模板（GET 请求或 POST 处理后重定向回来）
+        require_once 'template/reset.php';
+    }
+
+    /**
+     * 初始化 Session
+     * 确保 Session 已启动以存储通知信息
+     */
+    private function initSession()
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
         }
     }
 
     /**
      * 统一的通知推送方法
-     * 替代原有的 _setNotice，参数更加规范。
+     * 使用 Session 存储通知信息，由前端 JavaScript 读取并显示
      *
      * @param string|array $message 消息内容
-     * @param string $type 消息类型 (error, success, notice)
+     * @param string $type 消息类型 (error, success, notice, info)
      */
     private function pushNotice($message, string $type = 'notice')
     {
@@ -370,12 +394,16 @@ class Passport_Widget extends Widget implements ActionInterface
             $message = _t('未知错误');
         }
 
-        $this->notice->set($message, $type);
+        // 存储到 Session 中
+        $_SESSION['passport_notice'] = [
+            'message' => $message,
+            'type' => $type
+        ];
     }
 
     /**
      * 专门用于速率限制（封禁）的通知推送
-     * 生成带有倒计时 JS 的 HTML 提示。
+     * 生成倒计时信息并存储到 Session
      *
      * @param int $seconds 剩余封禁秒数
      */
@@ -389,33 +417,14 @@ class Passport_Widget extends Widget implements ActionInterface
         $minutes = floor($seconds / 60);
         $sec_part = $seconds % 60;
 
-        $msg = sprintf(
-            _t('您的请求过于频繁，已被暂时限制。请在 <span id="countdown-min">%d</span> 分 <span id="countdown-sec">%02d</span> 秒后重试。'),
-            $minutes, $sec_part
-        );
+        $msg = _t('您的请求过于频繁，已被暂时限制。请稍后重试。');
 
-        // 嵌入简单的倒计时脚本
-        $msg .= "<script>
-            (function() {
-                var s = {$seconds};
-                var mEl = document.getElementById('countdown-min');
-                var sEl = document.getElementById('countdown-sec');
-                if(!mEl || !sEl) return;
-                var timer = setInterval(function(){
-                    s--;
-                    if(s<=0){
-                        clearInterval(timer);
-                        mEl.parentNode.innerHTML = '" . _t('现在可以刷新页面重试了。') . "';
-                        return;
-                    }
-                    mEl.innerText = Math.floor(s/60);
-                    var rs = s%60;
-                    sEl.innerText = rs<10?'0'+rs:rs;
-                }, 1000);
-            })();
-        </script>";
-
-        $this->notice->set($msg, 'error');
+        // 存储到 Session 中，包含倒计时信息
+        $_SESSION['passport_notice'] = [
+            'message' => $msg,
+            'type' => 'error',
+            'countdown' => $seconds
+        ];
     }
 
     /**
