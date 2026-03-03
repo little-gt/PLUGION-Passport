@@ -278,7 +278,7 @@ class Passport_Widget extends Widget implements ActionInterface
 
         // 基础参数校验
         if (empty($token) || empty($signature)) {
-            $this->pushNotice(_t('无效的重置链接'), 'notice');
+            $this->pushTypechoNotice(_t('无效的重置链接'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
@@ -289,14 +289,14 @@ class Passport_Widget extends Widget implements ActionInterface
 
         // 令牌有效性检查 (过期时间: 1小时)
         if (empty($tokenRecord) || ($this->options->gmtTime - $tokenRecord['created_at']) > 3600) {
-            $this->pushNotice(_t('链接已失效或已使用，请重新申请。'), 'notice');
+            $this->pushTypechoNotice(_t('链接已失效或已使用，请重新申请。'), 'notice');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
 
         // 签名安全校验
         if (!$this->verifySignature($token, (int)$tokenRecord['uid'], (int)$tokenRecord['created_at'], $signature)) {
-            $this->pushNotice(_t('安全签名验证失败，链接非法。'), 'error');
+            $this->pushTypechoNotice(_t('安全签名验证失败，链接非法。'), 'error');
             $this->response->redirect($this->options->loginUrl);
             return;
         }
@@ -344,7 +344,7 @@ class Passport_Widget extends Widget implements ActionInterface
                     ->rows(['used' => 1])
                     ->where('token = ?', $token));
 
-                $this->pushNotice(_t('密码重置成功，请使用新密码登录。'), 'success');
+                $this->pushTypechoNotice(_t('密码重置成功，请使用新密码登录。'), 'success');
                 $this->response->redirect($this->options->loginUrl);
                 return;
 
@@ -399,6 +399,31 @@ class Passport_Widget extends Widget implements ActionInterface
             'message' => $message,
             'type' => $type
         ];
+    }
+
+    /**
+     * 推送 Typecho 原生通知
+     * 优先用于跳回 Typecho 页面（如登录页）的场景。
+     * 若原生通知不可用，则回退为 Passport Session 通知。
+     *
+     * @param string|array $message
+     * @param string $type
+     */
+    private function pushTypechoNotice($message, string $type = 'notice')
+    {
+        if (is_array($message)) {
+            $message = reset($message);
+        }
+
+        if (!is_string($message)) {
+            $message = _t('未知错误');
+        }
+
+        try {
+            Widget::widget('Widget_Notice')->set($message, $type);
+        } catch (\Throwable $e) {
+            $this->pushNotice($message, $type);
+        }
     }
 
     /**
