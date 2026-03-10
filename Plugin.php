@@ -254,7 +254,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         $resetHistoryPageSize = new Typecho_Widget_Helper_Form_Element_Text('resetHistoryPageSize', NULL, '25', _t('密码重置历史每页显示数'), _t('<span style="color: #5e6db3;">说明</span> 设置密码重置历史每页显示的记录数量，建议设置为 10-50 之间的数值。'));
         $form->addInput($resetHistoryPageSize);
 
-        $tokenRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('tokenRetentionDays', NULL, '30', _t('密码重置历史保留天数'), _t('<span style="color: #5e6db3;">说明</span> 保留已使用和过期的 token 记录的天数，用于安全审计。设置为 0 表示永久保留。建议设置为 30-90 天。'));
+        $tokenRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('tokenRetentionDays', NULL, '30', _t('密码重置历史保留天数'), _t('<span style="color: #5e6db3;">说明</span> 保留已使用和过期的 Token 记录的天数。设置为 0 表示永久保留。'));
         $form->addInput($tokenRetentionDays);
 
         // --- IP 策略设置组 ---

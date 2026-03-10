@@ -550,11 +550,12 @@ $token = hash('sha256',
 - 使用 PHP GD 库生成随机字符图片
 - 支持数字 + 字母组合，不区分大小写
 - 干扰线和噪点防止 OCR 识别
+- 使用 `hash_equals()` 防止时序攻击
 
 **Verify-and-Destroy 机制**（v0.1.3+）：
 ```php
 // 验证验证码
-if ($_SESSION['captcha'] !== $userInput) {
+if (!hash_equals($sessionCode, $inputCode)) {
     throw new Exception('验证码错误');
 }
 
