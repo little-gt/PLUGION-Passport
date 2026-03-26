@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM
- * @version 1.0.2
+ * @version 1.0.3
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -528,7 +528,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             $html .= '</div>';
         }
 
-        $html .= '</div>';
+        $html .= '</div><br>';
 
         // 添加样式和脚本
         $html .= self::getLogTableStyles();
@@ -725,7 +725,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             $html .= '</div></div>';
         }
 
-        $html .= '</div>';
+        $html .= '</div><br>';
 
         return $html;
     }
@@ -944,10 +944,9 @@ JS;
         return <<<CSS
         <style>
             .passport-log-toolbar {
-                background: #f5f5f5;
                 padding: 12px 15px;
-                border-radius: 4px;
-                border: 1px solid #ddd;
+                border-radius: 0px;
+                border: 1px solid #ababab;
                 margin-bottom: 15px;
             }
             .passport-log-toolbar-inner {
@@ -990,10 +989,9 @@ JS;
                 line-height: 18px;
             }
             .passport-log-pagination {
-                background: #f9f9f9;
                 padding: 10px 15px;
-                border-radius: 4px;
-                border: 1px solid #e5e5e5;
+                border-radius: 0px;
+                border: 1px solid #ababab;
                 margin-top: 15px;
             }
             .passport-log-pagination-inner {
