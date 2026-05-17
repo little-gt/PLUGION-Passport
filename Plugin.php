@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM
- * @version 1.0.3
+ * @version 1.0.4
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -143,7 +143,8 @@ class Passport_Plugin implements Typecho_Plugin_Interface
     public static function config(Typecho_Widget_Helper_Form $form)
     {
         // IP 解封请求的完整 URL
-        $actionUrl = Helper::security()->getIndex(Helper::url(self::ROUTE_UNBLOCK_IP_PATH, Helper::options()->index));
+        // 使用相对路径避免双重拼接
+        $actionUrl = Helper::security()->getIndex(self::ROUTE_UNBLOCK_IP_PATH);
 
         // --- 邮件服务配置组 ---
 
@@ -1103,43 +1104,87 @@ CSS;
             const searchButton = document.getElementById('passport-log-search-btn');
             const searchInput = document.getElementById('passport-log-search');
             const filterSelect = document.getElementById('passport-log-filter');
-            
+
+            // --- IP 解封表单 AJAX 处理 ---
+            const unblockForms = document.querySelectorAll('.unblock-form');
+            unblockForms.forEach(function(form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+
+                    const ip = form.getAttribute('data-ip');
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.textContent;
+
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = '解封中...';
+
+                    const formData = new FormData();
+                    formData.append('action', 'passport_unblock_ip');
+                    formData.append('ip', ip);
+
+                    fetch('{$actionUrl}', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        if (data.success) {
+                            alert(data.message || '解封成功！');
+                            window.location.reload();
+                        } else {
+                            alert(data.message || '解封失败，请重试。');
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = originalText;
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Unblock error:', error);
+                        alert('网络错误，请重试。');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    });
+                });
+            });
+
             if (refreshButton) {
                 refreshButton.addEventListener('click', function() {
                     window.location.reload();
                 });
             }
-            
+
             if (searchButton && searchInput && filterSelect) {
                 searchButton.addEventListener('click', function() {
                     const searchValue = searchInput.value.trim();
                     const filterValue = filterSelect.value;
                     const currentUrl = new URL(window.location.href);
-                    
+
                     if (searchValue) {
                         currentUrl.searchParams.set('passport_log_search', searchValue);
                     } else {
                         currentUrl.searchParams.delete('passport_log_search');
                     }
-                    
+
                     if (filterValue !== 'all') {
                         currentUrl.searchParams.set('passport_log_filter', filterValue);
                     } else {
                         currentUrl.searchParams.delete('passport_log_filter');
                     }
                     currentUrl.searchParams.set('passport_log_page', '1');
-                    
+
                     window.location.href = currentUrl.toString();
                 });
-                
-                // 支持回车键搜索
+
                 searchInput.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         searchButton.click();
                     }
                 });
-                
-                // 筛选变化时自动搜索
+
                 filterSelect.addEventListener('change', function() {
                     searchButton.click();
                 });

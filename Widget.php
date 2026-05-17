@@ -73,7 +73,14 @@ class Passport_Widget extends Widget implements ActionInterface
      */
     public function action()
     {
-        // 鉴权：仅管理员可操作
+        // 初始化用户对象
+        // Action 路由时需要手动初始化
+        if (empty($this->user)) {
+            $this->user = Widget::widget('Widget_User');
+        }
+
+        // 鉴权
+        // 仅管理员可操作
         $this->user->pass('administrator');
         $security = Widget::widget('Widget_Security');
         $security->protect();

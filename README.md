@@ -4,17 +4,17 @@ Passport 是一款为 Typecho 博客系统设计的安全插件。
 
 插件提供安全的密码找回与重置功能。插件内置零配置图片验证码，同时支持多种主流第三方人机验证方式。内置严格的 Token 管理、HMAC 签名机制以及支持 CDN 环境的高级防爆破功能。本项目遵循 GPLv2 协议，完全免费开源。
 
-[![Passport Version](https://img.shields.io/badge/Passport-v1.0.3-007EC6?style=for-the-badge&logo=securityscorecard&logoColor=white)](https://github.com/little-gt/PLUGION-Passport)
+[![Passport Version](https://img.shields.io/badge/Passport-v1.0.4-007EC6?style=for-the-badge&logo=securityscorecard&logoColor=white)](https://github.com/little-gt/PLUGION-Passport)
 [![PHP Version](https://img.shields.io/badge/PHP-7.4+-007EC6?style=for-the-badge&logo=php&logoColor=white)](https://www.php.net/)
 [![License](https://img.shields.io/badge/License-GPL%20v2.0-green?style=for-the-badge)](https://opensource.org/licenses/GPL-2.0)
 
 ## 📷 预览图
 
 ### 后台管理界面
-![后台管理界面](screenshots/screenshot1.png)
+![后台管理界面](https://cnb.cool/little-gt/Passport/-/git/raw/main/screenshots/screenshot1.png)
 
 ### 密码找回页面
-![密码找回页面](screenshots/screenshot2.png)
+![密码找回页面](https://cnb.cool/little-gt/Passport/-/git/raw/main/screenshots/screenshot2.png)
 
 ## 📦 项目简介
 
