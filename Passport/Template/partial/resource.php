@@ -4,6 +4,11 @@
  *
  * 用于 Typecho 插件 Passport 的独立前端页面（如找回密码、重置密码）的静态资源。
  * 包含所有页面共享的 CSS 样式和 JavaScript 脚本。
+ *
+ * 设计规范：
+ * - 完全矩形化设计（border-radius: 0）
+ * - 纯黑中性色板，OLED 友好，护眼不刺眼
+ * - 色彩令牌 100% 同步 BooAdmin dark.css 最新纯黑配色
  */
 
 // 严格安全检查: 防止文件被直接访问。
@@ -12,60 +17,132 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 // --- CSS 样式 --- ?>
 
 <style>
+    /* ========================================
+     * 亮色模式默认值 (BooAdmin light.css)
+     * ======================================== */
     :root {
-        --passport-primary: #467b96;
-        --passport-primary-light: #5a8bb3;
-        --passport-primary-dark: #3a6378;
-        --passport-bg-light: #f8f9fa;
-        --passport-bg-dark: #1a1d21;
-        --passport-card-bg-light: #ffffff;
-        --passport-card-bg-dark: #252a30;
-        --passport-text-light: #2c3e50;
-        --passport-text-dark: #e8eaed;
-        --passport-border-light: #e1e4e8;
-        --passport-border-dark: #374151;
-        --passport-input-bg-light: #f8f9fa;
-        --passport-input-bg-dark: #1f2429;
-        --passport-placeholder-light: #9ca3af;
-        --passport-placeholder-dark: #6b7280;
-        --passport-success-light: #10b981;
-        --passport-success-dark: #059669;
-        --passport-error-light: #ef4444;
-        --passport-error-dark: #dc2626;
-        --passport-warning-light: #f59e0b;
-        --passport-warning-dark: #d97706;
+        color-scheme: light;
+
+        /* === 主色调 (BooAdmin light.css --booadmin-accent) === */
+        --passport-primary: #5865f2;
+        --passport-primary-hover: #4752c4;
+        --passport-primary-active: #3c45a5;
+
+        /* === 背景色 (BooAdmin light.css surface 系统) === */
+        --passport-bg: #f2f3f5;
+        --passport-card-bg: #ffffff;
+        --passport-input-bg: #f3f4f6;
+
+        /* === 文本色 (BooAdmin light.css text 系统) === */
+        --passport-text: #2e3338;
+        --passport-muted: #5c5e66;
+        --passport-placeholder: #9ca3af;
+
+        /* === 边框色 (BooAdmin light.css border) === */
+        --passport-border: #e5e7eb;
+        --passport-border-strong: #d1d5db;
+
+        /* === 语义色 - 成功 (BooAdmin light.css --booadmin-success) === */
+        --passport-success: #16a34a;
+        --passport-success-bg: #def7ec;
+
+        /* === 语义色 - 危险/错误 (BooAdmin light.css --booadmin-danger) === */
+        --passport-danger: #dc2626;
+        --passport-error: #dc2626;
+        --passport-error-bg: #fde8e8;
+
+        /* === 语义色 - 警告 (BooAdmin light.css --booadmin-warning) === */
+        --passport-warning: #ea580c;
+        --passport-warning-bg: #fff6bf;
+
+        /* === 语义色 - 信息 (BooAdmin light.css --booadmin-info) === */
+        --passport-info: #2563eb;
+        --passport-info-bg: #eff6ff;
+
+        /* === 按钮 - 亮色实心风格 === */
+        --passport-btn-bg: var(--passport-primary);
+        --passport-btn-text: #ffffff;
+        --passport-btn-border: transparent;
+        --passport-btn-hover-bg: var(--passport-primary-hover);
+        --passport-btn-hover-text: #ffffff;
+
+        /* === 矩形化设计规范 === */
+        --passport-radius-sm: 0px;
+        --passport-radius-md: 0px;
+        --passport-radius-lg: 0px;
+        --passport-radius-full: 0px;
+
+        /* === 阴影规范 (亮色风格) === */
+        --passport-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+        --passport-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08);
+
+        /* === 焦点环 (BooAdmin light.css --booadmin-focus-ring) === */
+        --passport-focus-ring: rgba(88, 101, 242, 0.22);
     }
 
+    /* ========================================
+     * 暗色模式覆盖 (BooAdmin dark.css 纯黑中性色板)
+     * OLED 友好，护眼不刺眼
+     * ======================================== */
     @media (prefers-color-scheme: dark) {
         :root {
-            --passport-bg: var(--passport-bg-dark);
-            --passport-card-bg: var(--passport-card-bg-dark);
-            --passport-text: var(--passport-text-dark);
-            --passport-border: var(--passport-border-dark);
-            --passport-input-bg: var(--passport-input-bg-dark);
-            --passport-placeholder: var(--passport-placeholder-dark);
-            --passport-success: var(--passport-success-dark);
-            --passport-error: var(--passport-error-dark);
-            --passport-warning: var(--passport-warning-dark);
+            color-scheme: dark;
+
+            /* === 主色调 深沉靛蓝 === */
+            --passport-primary: #6366c7;
+            --passport-primary-hover: #7c7fd6;
+            --passport-primary-active: #9899e3;
+
+            /* === 背景色 纯黑系统 === */
+            --passport-bg: #000000;
+            --passport-card-bg: #0d0d0d;
+            --passport-input-bg: #151515;
+
+            /* === 文本色 === */
+            --passport-text: #e4e4e7;
+            --passport-muted: #8a8a99;
+            --passport-placeholder: #6b6b76;
+
+            /* === 边框色 中性 === */
+            --passport-border: #222222;
+            --passport-border-strong: #333333;
+
+            /* === 语义色 - 成功 柔和绿 === */
+            --passport-success: #6bc78a;
+            --passport-success-bg: #0a1f12;
+
+            /* === 语义色 - 危险/错误 低饱和红 === */
+            --passport-danger: #e07a7a;
+            --passport-error: #e07a7a;
+            --passport-error-bg: #2a0c10;
+
+            /* === 语义色 - 警告 琥珀 === */
+            --passport-warning: #d4a72a;
+            --passport-warning-bg: #2a2208;
+
+            /* === 语义色 - 信息 天蓝 === */
+            --passport-info: #7aadf0;
+            --passport-info-bg: #081420;
+
+            /* === 按钮 - 暗底柔字风格 === */
+            --passport-btn-bg: #3a3c6e;
+            --passport-btn-text: #c4c8e8;
+            --passport-btn-border: #484a78;
+            --passport-btn-hover-bg: #46487d;
+            --passport-btn-hover-text: #ddddef;
+
+            /* === 阴影规范 (暗色风格) === */
+            --passport-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+            --passport-shadow-md: 0 2px 4px rgba(0, 0, 0, 0.18);
+
+            /* === 焦点环 === */
+            --passport-focus-ring: rgba(99, 102, 199, 0.18);
         }
     }
 
-    @media (prefers-color-scheme: light) {
-        :root {
-            --passport-bg: var(--passport-bg-light);
-            --passport-card-bg: var(--passport-card-bg-light);
-            --passport-text: var(--passport-text-light);
-            --passport-border: var(--passport-border-light);
-            --passport-input-bg: var(--passport-input-bg-light);
-            --passport-placeholder: var(--passport-placeholder-light);
-            --passport-success: var(--passport-success-light);
-            --passport-error: var(--passport-error-light);
-            --passport-warning: var(--passport-warning-light);
-        }
-    }
-
+    /* === 基础重置 (BooAdmin 字体栈) === */
     body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
         background-color: var(--passport-bg);
         color: var(--passport-text);
         margin: 0;
@@ -76,8 +153,11 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         align-items: center;
         justify-content: center;
         transition: background-color 0.3s ease, color 0.3s ease;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
     }
 
+    /* === 容器 === */
     .passport-container {
         width: 100%;
         max-width: 440px;
@@ -86,30 +166,25 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
     }
 
     @media (min-width: 1920px) {
-        .passport-container {
-            max-width: 520px;
-            padding: 24px;
-        }
+        .passport-container { max-width: 520px; padding: 24px; }
     }
 
     @media (min-width: 2560px) {
-        .passport-container {
-            max-width: 600px;
-            padding: 32px;
-        }
+        .passport-container { max-width: 600px; padding: 32px; }
     }
 
+    /* === Logo 区域 === */
     .passport-logo {
         text-align: center;
-        margin-bottom: 40px;
+        margin-bottom: 32px;
     }
 
     .passport-logo h1 {
         margin: 0;
-        font-size: 28px;
-        font-weight: 600;
+        font-size: 26px;
+        font-weight: 700;
         color: var(--passport-primary);
-        letter-spacing: -0.5px;
+        letter-spacing: -0.3px;
     }
 
     .passport-logo h1 a {
@@ -122,35 +197,41 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         opacity: 0.8;
     }
 
+    /* === 卡片容器 (矩形: border-radius: 0) === */
     .passport-card {
         background-color: var(--passport-card-bg);
         padding: 40px;
-        transition: background-color 0.3s ease;
+        border-radius: 0;
         border: 1px solid var(--passport-border);
+        box-shadow: var(--passport-shadow-md);
+        transition: background-color 0.3s ease, border-color 0.3s ease;
     }
 
+    /* === 标题区域 === */
     .passport-title {
         text-align: center;
-        margin-bottom: 32px;
+        margin-bottom: 28px;
     }
 
     .passport-title h2 {
         margin: 0;
-        font-size: 24px;
-        font-weight: 600;
+        font-size: 22px;
+        font-weight: 700;
         color: var(--passport-text);
+        letter-spacing: -0.2px;
     }
 
+    /* === 表单 === */
     .passport-form {
         display: flex;
         flex-direction: column;
-        gap: 24px;
+        gap: 20px;
     }
 
     .passport-form-group {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 6px;
     }
 
     .passport-label {
@@ -166,14 +247,16 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         margin-left: 2px;
     }
 
+    /* === 输入框 (矩形: border-radius: 0) === */
     .passport-input {
         width: 100%;
-        height: 48px;
-        padding: 0 16px;
-        font-size: 15px;
+        height: 46px;
+        padding: 0 14px;
+        font-size: 14px;
         color: var(--passport-text);
         background-color: var(--passport-input-bg);
-        border: 2px solid var(--passport-border);
+        border: 1px solid var(--passport-border);
+        border-radius: 0;
         box-sizing: border-box;
         transition: all 0.2s ease;
         outline: none;
@@ -186,19 +269,21 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
     .passport-input:focus {
         border-color: var(--passport-primary);
         background-color: var(--passport-card-bg);
+        box-shadow: 0 0 0 3px var(--passport-focus-ring);
     }
 
-    .passport-input:hover {
-        border-color: var(--passport-primary-light);
+    .passport-input:hover:not(:focus) {
+        border-color: var(--passport-border-strong);
     }
 
     .passport-description {
         font-size: 13px;
-        color: var(--passport-placeholder);
+        color: var(--passport-muted);
         margin: 4px 0 0 0;
         line-height: 1.5;
     }
 
+    /* === 验证码区域 === */
     .passport-captcha {
         display: flex;
         align-items: center;
@@ -212,7 +297,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
     .passport-captcha-wrapper {
         position: relative;
-        height: 48px;
+        height: 46px;
         flex-shrink: 0;
         display: flex;
         align-items: center;
@@ -220,8 +305,9 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
     }
 
     .passport-captcha-img {
-        height: 48px;
-        border: 2px solid var(--passport-border);
+        height: 46px;
+        border: 1px solid var(--passport-border);
+        border-radius: 0;
         cursor: pointer;
         transition: border-color 0.2s ease;
         flex-shrink: 0;
@@ -239,12 +325,12 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
     .passport-captcha-loader {
         position: absolute;
-        width: 24px;
-        height: 24px;
-        border: 3px solid var(--passport-border);
+        width: 22px;
+        height: 22px;
+        border: 2.5px solid var(--passport-border);
         border-top-color: var(--passport-primary);
         border-radius: 50%;
-        animation: passkeyRotate 0.8s linear infinite;
+        animation: passportRotate 0.8s linear infinite;
         display: none;
     }
 
@@ -252,42 +338,38 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         display: block;
     }
 
-    @keyframes passkeyRotate {
-        from {
-            transform: rotate(0deg);
-        }
-        to {
-            transform: rotate(360deg);
-        }
+    @keyframes passportRotate {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
     }
 
+    /* === 按钮 (矩形: border-radius: 0, 暗底柔字风格) === */
     .passport-btn {
         width: 100%;
-        height: 48px;
+        height: 46px;
         padding: 0 24px;
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 600;
-        color: #ffffff;
-        background-color: var(--passport-primary);
-        border: none;
+        color: var(--passport-btn-text);
+        background-color: var(--passport-btn-bg);
+        border: 1px solid var(--passport-btn-border);
+        border-radius: 0;
         cursor: pointer;
         transition: all 0.2s ease;
         outline: none;
-        margin-top: 8px;
+        margin-top: 4px;
     }
 
     .passport-btn:hover {
-        background-color: var(--passport-primary-light);
+        background-color: var(--passport-btn-hover-bg);
+        color: var(--passport-btn-hover-text);
     }
 
-    .passport-btn:active {
-        background-color: var(--passport-primary-dark);
-    }
-
+    /* === 底部链接 === */
     .passport-links {
         text-align: center;
-        margin-top: 32px;
-        padding-top: 24px;
+        margin-top: 28px;
+        padding-top: 20px;
         border-top: 1px solid var(--passport-border);
     }
 
@@ -295,11 +377,12 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         color: var(--passport-primary);
         text-decoration: none;
         font-size: 14px;
+        font-weight: 500;
         transition: color 0.2s ease;
     }
 
     .passport-links a:hover {
-        color: var(--passport-primary-light);
+        color: var(--passport-primary-hover);
         text-decoration: underline;
     }
 
@@ -308,75 +391,78 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         margin: 0 8px;
     }
 
+    /* === 页面内提示 Notice (左边框强调 + 语义背景色) === */
     .passport-notice {
         padding: 12px 16px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
         font-size: 14px;
         line-height: 1.5;
-        border: 1px solid;
+        border-radius: 0;
+        border-left: 4px solid;
     }
 
     .passport-notice.success {
-        background-color: rgba(16, 185, 129, 0.1);
+        background-color: var(--passport-success-bg);
         color: var(--passport-success);
-        border-color: var(--passport-success);
+        border-left-color: var(--passport-success);
     }
 
     .passport-notice.error {
-        background-color: rgba(239, 68, 68, 0.1);
+        background-color: var(--passport-error-bg);
         color: var(--passport-error);
-        border-color: var(--passport-error);
+        border-left-color: var(--passport-error);
     }
 
     .passport-notice.warning {
-        background-color: rgba(245, 158, 11, 0.1);
+        background-color: var(--passport-warning-bg);
         color: var(--passport-warning);
-        border-color: var(--passport-warning);
+        border-left-color: var(--passport-warning);
     }
 
-    /* 页面内提示样式 - 与 Passkey 样式一致（扁平化设计） */
+    /* === Toast 通知系统 (矩形: border-radius: 0) === */
     .passport-toast {
         position: fixed;
         top: 20px;
         right: 20px;
-        padding: 12px 16px;
+        padding: 14px 18px;
         border-radius: 0;
         font-size: 14px;
         z-index: 99999;
         display: flex;
         align-items: flex-start;
         gap: 12px;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         min-width: 280px;
         max-width: 400px;
         opacity: 0;
         transform: translateX(100px);
-        animation: passkeySlideIn 0.3s ease forwards;
+        animation: passportSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         border: 1px solid;
+        box-shadow: var(--passport-shadow-md);
     }
 
     .passport-toast.success {
-        background-color: rgba(16, 185, 129, 0.1);
-        border-color: #10b981;
-        color: #10b981;
+        background-color: var(--passport-success-bg);
+        border-color: var(--passport-success);
+        color: var(--passport-success);
     }
 
     .passport-toast.error {
-        background-color: rgba(239, 68, 68, 0.1);
-        border-color: #ef4444;
-        color: #ef4444;
+        background-color: var(--passport-error-bg);
+        border-color: var(--passport-error);
+        color: var(--passport-error);
     }
 
     .passport-toast.warning {
-        background-color: rgba(245, 158, 11, 0.1);
-        border-color: #f59e0b;
-        color: #f59e0b;
+        background-color: var(--passport-warning-bg);
+        border-color: var(--passport-warning);
+        color: var(--passport-warning);
     }
 
     .passport-toast.info {
-        background-color: rgba(70, 123, 150, 0.1);
-        border-color: #467b96;
-        color: #467b96;
+        background-color: var(--passport-info-bg);
+        border-color: var(--passport-info);
+        color: var(--passport-info);
     }
 
     .passport-toast-icon {
@@ -384,24 +470,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 24px;
-        height: 24px;
-        color: inherit;
-    }
-
-    .passport-toast-icon.success {
-        color: inherit;
-    }
-
-    .passport-toast-icon.error {
-        color: inherit;
-    }
-
-    .passport-toast-icon.warning {
-        color: inherit;
-    }
-
-    .passport-toast-icon.info {
+        width: 22px;
+        height: 22px;
         color: inherit;
     }
 
@@ -410,6 +480,9 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         height: 18px;
         stroke: currentColor;
         fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }
 
     .passport-toast-message {
@@ -422,11 +495,11 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
     .passport-toast-close {
         background: none;
         border: none;
-        font-size: 24px;
+        font-size: 20px;
         line-height: 1;
         cursor: pointer;
         color: inherit;
-        opacity: 0.6;
+        opacity: 0.5;
         padding: 0;
         margin-left: 8px;
         flex-shrink: 0;
@@ -436,56 +509,35 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
     }
 
     .passport-toast-close:hover {
-        opacity: 1;
+        opacity: 0.85;
     }
 
     .passport-toast.hiding {
-        animation: passkeySlideOut 0.3s ease forwards;
+        animation: passportSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 
-    @keyframes passkeySlideIn {
-        from {
-            opacity: 0;
-            transform: translateX(100px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
+    @keyframes passportSlideIn {
+        from { opacity: 0; transform: translateX(100px); }
+        to   { opacity: 1; transform: translateX(0); }
     }
 
-    @keyframes passkeySlideOut {
-        from {
-            opacity: 1;
-            transform: translateX(0);
-        }
-        to {
-            opacity: 0;
-            transform: translateX(100px);
-        }
+    @keyframes passportSlideOut {
+        from { opacity: 1; transform: translateX(0); }
+        to   { opacity: 0; transform: translateX(100px); }
     }
 
+    /* === 响应式适配 === */
     @media (max-width: 480px) {
-        .passport-container {
-            padding: 16px;
-        }
-
-        .passport-card {
-            padding: 32px 24px;
-        }
-
-        .passport-title h2 {
-            font-size: 20px;
-        }
-
+        .passport-container { padding: 16px; }
+        .passport-card { padding: 28px 20px; }
+        .passport-title h2 { font-size: 20px; }
+        .passport-logo h1 { font-size: 22px; }
         .passport-input,
-        .passport-btn {
-            height: 44px;
-        }
-
+        .passport-btn { height: 44px; }
+        .passport-captcha-img { height: 44px; }
         .passport-toast {
-            left: 10px;
-            right: 10px;
+            left: 12px;
+            right: 12px;
             min-width: auto;
             max-width: none;
         }
@@ -495,7 +547,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 <?php // --- JavaScript 脚本 --- ?>
 
 <script>
-    // SVG 图标库（与 Passkey 一致）
+    // SVG 图标库
     var PassportSVGIcons = {
         check: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
         x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
@@ -503,234 +555,65 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
     };
 
-    // 页面内提示系统（重构版，与 Passkey 样式一致）
+    // Toast 通知系统
     var PassportToast = {
         currentToast: null,
-        
+        hideTimer: null,
+
         show: function(message, type, duration) {
             type = type || 'info';
-            duration = typeof duration !== 'undefined' ? duration : 5000;
-            
-            // 移除已存在的提示
-            this.hide();
+            duration = duration || 4000;
 
-            // 创建提示元素
-            var toast = document.createElement('div');
-            toast.className = 'passport-toast passport-toast-' + type;
-            toast.id = 'passport-toast';
-
-            // 选择图标
-            var iconSvg = '';
-            switch(type) {
-                case 'success':
-                    iconSvg = PassportSVGIcons.check;
-                    break;
-                case 'error':
-                    iconSvg = PassportSVGIcons.x;
-                    break;
-                case 'warning':
-                    iconSvg = PassportSVGIcons.alert;
-                    break;
-                default:
-                    iconSvg = PassportSVGIcons.info;
+            if (this.currentToast) {
+                this.currentToast.classList.add('hiding');
+                clearTimeout(this.hideTimer);
+                var toast = this.currentToast;
+                setTimeout(function() {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300);
             }
 
-            // 图标容器
-            var iconSpan = document.createElement('span');
-            iconSpan.className = 'passport-toast-icon ' + type;
-            iconSpan.innerHTML = iconSvg;
+            var toastEl = document.createElement('div');
+            toastEl.className = 'passport-toast ' + type;
 
-            // 消息容器
-            var messageDiv = document.createElement('div');
-            messageDiv.className = 'passport-toast-message';
-            messageDiv.innerHTML = message;
+            var iconSvg = PassportSVGIcons[type] || PassportSVGIcons.info;
+            toastEl.innerHTML =
+                '<div class="passport-toast-icon ' + type + '">' + iconSvg + '</div>' +
+                '<div class="passport-toast-message">' + message + '</div>' +
+                '<button class="passport-toast-close">&times;</button>';
 
-            // 关闭按钮
-            var closeBtn = document.createElement('button');
-            closeBtn.className = 'passport-toast-close';
-            closeBtn.innerHTML = '×';
-            closeBtn.onclick = function() {
-                PassportToast.hide();
-            };
+            document.body.appendChild(toastEl);
+            this.currentToast = toastEl;
 
-            toast.appendChild(iconSpan);
-            toast.appendChild(messageDiv);
-            toast.appendChild(closeBtn);
-            document.body.appendChild(toast);
+            var closeBtn = toastEl.querySelector('.passport-toast-close');
+            closeBtn.addEventListener('click', function() {
+                PassportToast.hide(toastEl);
+            });
 
-            this.currentToast = toast;
-
-            // 自动隐藏（如果 duration > 0）
             if (duration > 0) {
-                setTimeout(function() {
-                    PassportToast.hide();
+                this.hideTimer = setTimeout(function() {
+                    PassportToast.hide(toastEl);
                 }, duration);
             }
 
-            return toast;
+            return toastEl;
         },
-        
-        hide: function() {
-            if (this.currentToast && this.currentToast.parentNode) {
-                this.currentToast.classList.add('hiding');
-                var toastToRemove = this.currentToast;
-                setTimeout(function() {
-                    if (toastToRemove.parentNode) {
-                        toastToRemove.parentNode.removeChild(toastToRemove);
-                    }
-                }, 300);
-                this.currentToast = null;
-            }
-        }
-    };
 
-    // 全局输入内容检查
-    document.addEventListener('DOMContentLoaded', function() {
-        // 检查是否有从 PHP Session 传递的通知信息
-        <?php
-        if (isset($_SESSION['passport_notice'])) {
-            $notice = $_SESSION['passport_notice'];
-            // 清除 Session 中的通知
-            unset($_SESSION['passport_notice']);
-            // 使用 JSON 安全地传递数据到 JavaScript
-            echo 'var passportNoticeData = ' . json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) . ';';
-        } else {
-            echo 'var passportNoticeData = null;';
-        }
-        ?>
-
-        // 处理通知显示
-        if (passportNoticeData) {
-            var message = passportNoticeData.message || '';
-            var type = passportNoticeData.type || 'info';
-            var countdown = passportNoticeData.countdown || 0;
-
-            if (countdown > 0) {
-                // 有倒计时的情况 - 不自动关闭
-                var minutes = Math.floor(countdown / 60);
-                var seconds = countdown % 60;
-                var countdownMsg = message + ' 请在 <span id="countdown-min">' + minutes + '</span> 分 <span id="countdown-sec">' + (seconds < 10 ? '0' + seconds : seconds) + '</span> 秒后重试。';
-                
-                // duration = 0 表示不自动关闭
-                PassportToast.show(countdownMsg, type, 0);
-                
-                // 启动倒计时
-                var remainingSeconds = countdown;
-                var countdownTimer = setInterval(function() {
-                    remainingSeconds--;
-                    
-                    if (remainingSeconds <= 0) {
-                        clearInterval(countdownTimer);
-                        
-                        // 倒计时结束，更新消息
-                        var messageDiv = document.querySelector('.passport-toast-message');
-                        if (messageDiv) {
-                            messageDiv.textContent = '现在可以刷新页面重试了。';
-                        }
-                        
-                        // 延时1秒后自动关闭
-                        setTimeout(function() {
-                            PassportToast.hide();
-                        }, 1000);
-                        return;
-                    }
-                    
-                    // 更新倒计时显示
-                    var mEl = document.getElementById('countdown-min');
-                    var sEl = document.getElementById('countdown-sec');
-                    if (mEl && sEl) {
-                        mEl.textContent = Math.floor(remainingSeconds / 60);
-                        var rs = remainingSeconds % 60;
-                        sEl.textContent = rs < 10 ? '0' + rs : rs;
-                    }
-                }, 1000);
-            } else {
-                // 普通提示 - 5秒后自动关闭
-                PassportToast.show(message, type, 5000);
-            }
-        }
-
-        // 为所有表单添加基本验证
-        const forms = document.querySelectorAll('.passport-form');
-        forms.forEach(form => {
-            form.addEventListener('submit', function(e) {
-                // 基本的客户端验证
-                const requiredInputs = form.querySelectorAll('[required]');
-                let isValid = true;
-                let errorMessage = '';
-                
-                requiredInputs.forEach(input => {
-                    if (!input.value.trim()) {
-                        isValid = false;
-                        input.style.borderColor = 'var(--passport-error)';
-                        const label = input.closest('.passport-form-group').querySelector('.passport-label');
-                        if (label) {
-                            errorMessage = `请填写${label.textContent.replace(' *', '')}`;
-                        }
-                    } else {
-                        input.style.borderColor = 'var(--passport-border)';
-                        
-                        // 邮箱格式验证
-                        if (input.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) {
-                            isValid = false;
-                            input.style.borderColor = 'var(--passport-error)';
-                            errorMessage = '请输入有效的邮箱地址';
-                        }
-                        
-                        // 密码长度验证
-                        if (input.name === 'password' && input.value.length < 8) {
-                            isValid = false;
-                            input.style.borderColor = 'var(--passport-error)';
-                            errorMessage = '密码长度至少8位';
-                        }
-                        
-                        // 密码确认验证
-                        if (input.name === 'confirm') {
-                            const passwordInput = form.querySelector('input[name="password"]');
-                            if (passwordInput && input.value !== passwordInput.value) {
-                                isValid = false;
-                                input.style.borderColor = 'var(--passport-error)';
-                                errorMessage = '两次输入的密码不一致';
-                            }
-                        }
-                    }
-                });
-
-                if (!isValid) {
-                    e.preventDefault();
-                    PassportToast.show(errorMessage, 'error');
+        hide: function(toastEl) {
+            if (!toastEl) return;
+            toastEl.classList.add('hiding');
+            clearTimeout(this.hideTimer);
+            setTimeout(function() {
+                if (toastEl.parentNode) toastEl.parentNode.removeChild(toastEl);
+                if (PassportToast.currentToast === toastEl) {
+                    PassportToast.currentToast = null;
                 }
-            });
+            }, 300);
+        },
 
-            // 输入框焦点事件
-            const inputs = form.querySelectorAll('.passport-input');
-            inputs.forEach(input => {
-                input.addEventListener('focus', function() {
-                    this.style.borderColor = 'var(--passport-primary)';
-                });
-                
-                input.addEventListener('blur', function() {
-                    if (!this.value.trim()) {
-                        this.style.borderColor = 'var(--passport-border)';
-                    } else {
-                        // 实时验证
-                        if (this.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.value)) {
-                            this.style.borderColor = 'var(--passport-error)';
-                        } else if (this.name === 'password' && this.value.length < 8) {
-                            this.style.borderColor = 'var(--passport-error)';
-                        } else if (this.name === 'confirm') {
-                            const passwordInput = form.querySelector('input[name="password"]');
-                            if (passwordInput && this.value !== passwordInput.value) {
-                                this.style.borderColor = 'var(--passport-error)';
-                            } else {
-                                this.style.borderColor = 'var(--passport-border)';
-                            }
-                        } else {
-                            this.style.borderColor = 'var(--passport-border)';
-                        }
-                    }
-                });
-            });
-        });
-    });
+        success: function(message, duration) { return this.show(message, 'success', duration); },
+        error: function(message, duration)   { return this.show(message, 'error', duration); },
+        warning: function(message, duration) { return this.show(message, 'warning', duration); },
+        info: function(message, duration)     { return this.show(message, 'info', duration); }
+    };
 </script>

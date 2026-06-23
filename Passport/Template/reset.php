@@ -175,5 +175,9 @@ include 'partial/resource.php';
     </script>
 <?php endif; ?>
 
+    </div>
+
+    <!-- 页面加载完成标记，防止样式闪烁 -->
+    <script>document.body.classList.add('loaded');</script>
 </body>
 </html>

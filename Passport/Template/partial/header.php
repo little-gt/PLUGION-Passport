@@ -3,6 +3,7 @@
  * Passport 插件独立前端模板 - 头部
  *
  * 用于 Typecho 插件 Passport 的独立前端页面（如找回密码、重置密码）的头部模板。
+ * 样式对齐 BooAdmin 主题视觉规范。
  */
 
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
@@ -37,6 +38,14 @@ $lang = (string) $options->lang;
         <link href="/favicon.ico" rel="icon" type="image/png">
         <!-- 告知搜索引擎不要索引或跟踪此页面 (适用于后台或功能性页面) -->
         <meta name="robots" content="noindex, nofollow">
+        <!-- 字体 - 对齐 BooAdmin 字体栈 -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <style>
+            /* 基础重置 - 确保在样式加载前无闪烁 */
+            body { opacity: 0; transition: opacity 0.15s ease; }
+            body.loaded { opacity: 1; }
+        </style>
     </head>
     <!-- body 标签 -->
     <body>

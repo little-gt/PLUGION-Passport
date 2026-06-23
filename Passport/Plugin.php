@@ -10,7 +10,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @package Passport
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2025 GARFIELDTOM
- * @version 1.1.1
+ * @version 1.1.2
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -148,10 +148,10 @@ class Passport_Plugin implements Typecho_Plugin_Interface
 
         // --- 邮件服务配置组 ---
 
-        $host = new Typecho_Widget_Helper_Form_Element_Text('host', NULL, 'smtp.example.com', _t('SMTP 服务器'), _t('<span style="color: #ce5252;">必须</span> 如: smtp.163.com'));
-        $port = new Typecho_Widget_Helper_Form_Element_Text('port', NULL, '465', _t('SMTP 端口'), _t('<span style="color: #ce5252;">必须</span> 如: 25、465(SSL)、587(TLS)'));
-        $username = new Typecho_Widget_Helper_Form_Element_Text('username', NULL, 'noreply@example.com', _t('SMTP 帐号'), _t('<span style="color: #ce5252;">必须</span> 如: example@163.com'));
-        $password = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, '', _t('SMTP 密码'), _t('<span style="color: #5e6db3;">说明</span> 如账号为无需密码验证的账号，可以留空。<span style="color: #35a937;">推荐配置客户端授权码。</span>'));
+        $host = new Typecho_Widget_Helper_Form_Element_Text('host', NULL, 'smtp.example.com', _t('SMTP 服务器'), _t('<span style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">必须</span> 如: smtp.163.com'));
+        $port = new Typecho_Widget_Helper_Form_Element_Text('port', NULL, '465', _t('SMTP 端口'), _t('<span style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">必须</span> 如: 25、465(SSL)、587(TLS)'));
+        $username = new Typecho_Widget_Helper_Form_Element_Text('username', NULL, 'noreply@example.com', _t('SMTP 帐号'), _t('<span style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">必须</span> 如: example@163.com'));
+        $password = new Typecho_Widget_Helper_Form_Element_Password('password', NULL, '', _t('SMTP 密码'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 如账号为无需密码验证的账号，可以留空。<span style="color: var(--booadmin-success, #16a34a); font-weight: 500;">推荐配置客户端授权码。</span>'));
         $secure = new Typecho_Widget_Helper_Form_Element_Select('secure', ['ssl' => _t('SSL'), 'tls' => _t('TLS'), 'none' => _t('无')], 'ssl', _t('加密类型'));
 
         $form->addInput($host);
@@ -199,7 +199,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
                                 </table>
                             </body>
                             </html>';
-        $emailTemplate = new Typecho_Widget_Helper_Form_Element_Textarea('emailTemplate', NULL, $defaultTemplate, _t('<h2>邮件模板配置</h2>邮件内容'), _t('<span style="color: #5e6db3;">说明</span> 请使用 {username} {sitename} {requestTime} {resetLink} 作为占位符'));
+        $emailTemplate = new Typecho_Widget_Helper_Form_Element_Textarea('emailTemplate', NULL, $defaultTemplate, _t('<h2>邮件模板配置</h2>邮件内容'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 请使用 {username} {sitename} {requestTime} {resetLink} 作为占位符'));
         $form->addInput($emailTemplate);
 
         // --- 人机验证配置组 ---
@@ -215,7 +215,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             ],
             'default',
             _t('<h2>人机验证配置</h2>验证码类型'),
-            _t('<span style="color: #ce5252;">必须</span> 为保障安全，验证码功能无法关闭。默认使用内置图片验证码，无需额外配置，开箱即用。')
+            _t('<span style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">必须</span> 为保障安全，验证码功能无法关闭。默认使用内置图片验证码，无需额外配置，开箱即用。')
         );
         $form->addInput($captchaType);
 
@@ -236,26 +236,26 @@ class Passport_Plugin implements Typecho_Plugin_Interface
 
         // --- 高级设置组 ---
 
-        $secretKey = new Typecho_Widget_Helper_Form_Element_Text('secretKey', NULL, self::generateStrongRandomKey(32), _t('<h2>安全策略配置</h2>HMAC 签名密钥'), _t('<span style="color: #5e6db3;">说明</span> 用于令牌签名验证的密钥。首次激活时已自动生成，<span style="color: #ce5252;">留空将禁用签名验证（极不推荐）</span>。'));
+        $secretKey = new Typecho_Widget_Helper_Form_Element_Text('secretKey', NULL, self::generateStrongRandomKey(32), _t('<h2>安全策略配置</h2>HMAC 签名密钥'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 用于令牌签名验证的密钥。首次激活时已自动生成，<span style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">留空将禁用签名验证（极不推荐）</span>。'));
         $form->addInput($secretKey);
 
-        $enableRateLimit = new Typecho_Widget_Helper_Form_Element_Radio('enableRateLimit', ['1' => _t('启用'), '0' => _t('禁用')], '1', _t('启用请求速率限制'), _t('<span style="color: #5e6db3;">说明</span> 可防止暴力破解和邮件滥用，并自动临时封禁风险IP。'));
+        $enableRateLimit = new Typecho_Widget_Helper_Form_Element_Radio('enableRateLimit', ['1' => _t('启用'), '0' => _t('禁用')], '1', _t('启用请求速率限制'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 可防止暴力破解和邮件滥用，并自动临时封禁风险IP。'));
         $form->addInput($enableRateLimit);
 
-        $deleteDataOnDeactivate = new Typecho_Widget_Helper_Form_Element_Radio('deleteDataOnDeactivate', ['1' => _t('是，删除所有数据'), '0' => _t('否，保留数据')], '0', _t('禁用插件时删除数据'), _t('<span style="color: #5e6db3;">说明</span> 选择"是"将在禁用插件时，永久删除此插件创建的所有数据库表和设置。'));
+        $deleteDataOnDeactivate = new Typecho_Widget_Helper_Form_Element_Radio('deleteDataOnDeactivate', ['1' => _t('是，删除所有数据'), '0' => _t('否，保留数据')], '0', _t('禁用插件时删除数据'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 选择"是"将在禁用插件时，永久删除此插件创建的所有数据库表和设置。'));
         $form->addInput($deleteDataOnDeactivate);
 
         // --- 日志管理设置组 ---
-        $logPageSize = new Typecho_Widget_Helper_Form_Element_Text('logPageSize', NULL, '25', _t('<h2>日志管理配置</h2>请求日志每页显示数'), _t('<span style="color: #5e6db3;">说明</span> 设置请求日志每页显示的记录数量，建议设置为 10-50 之间的数值。'));
+        $logPageSize = new Typecho_Widget_Helper_Form_Element_Text('logPageSize', NULL, '25', _t('<h2>日志管理配置</h2>请求日志每页显示数'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 设置请求日志每页显示的记录数量，建议设置为 10-50 之间的数值。'));
         $form->addInput($logPageSize);
 
-        $logRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('logRetentionDays', NULL, '0', _t('请求日志保留天数'), _t('<span style="color: #5e6db3;">说明</span> 自动清理超过指定天数的请求日志记录，设置为 0 表示不自动清理。'));
+        $logRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('logRetentionDays', NULL, '0', _t('请求日志保留天数'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 自动清理超过指定天数的请求日志记录，设置为 0 表示不自动清理。'));
         $form->addInput($logRetentionDays);
 
-        $resetHistoryPageSize = new Typecho_Widget_Helper_Form_Element_Text('resetHistoryPageSize', NULL, '25', _t('密码重置历史每页显示数'), _t('<span style="color: #5e6db3;">说明</span> 设置密码重置历史每页显示的记录数量，建议设置为 10-50 之间的数值。'));
+        $resetHistoryPageSize = new Typecho_Widget_Helper_Form_Element_Text('resetHistoryPageSize', NULL, '25', _t('密码重置历史每页显示数'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 设置密码重置历史每页显示的记录数量，建议设置为 10-50 之间的数值。'));
         $form->addInput($resetHistoryPageSize);
 
-        $tokenRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('tokenRetentionDays', NULL, '30', _t('密码重置历史保留天数'), _t('<span style="color: #5e6db3;">说明</span> 保留已使用和过期的 Token 记录的天数。设置为 0 表示永久保留。'));
+        $tokenRetentionDays = new Typecho_Widget_Helper_Form_Element_Text('tokenRetentionDays', NULL, '30', _t('密码重置历史保留天数'), _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 保留已使用和过期的 Token 记录的天数。设置为 0 表示永久保留。'));
         $form->addInput($tokenRetentionDays);
 
         // --- IP 策略设置组 ---
@@ -268,7 +268,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             ],
             'default',
             _t('<h2>IP 识别策略</h2>IP 地址获取方式'),
-            _t('<span style="color: #ce5252;">必须</span> 如果您的站点位于 CDN (如 Cloudflare) 或反向代理之后，请选择“代理头”或配置“自定义请求头”，否则速率限制功能将无法正确识别用户 IP。')
+            _t('<span style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">必须</span> 如果您的站点位于 CDN (如 Cloudflare) 或反向代理之后，请选择“代理头”或配置“自定义请求头”，否则速率限制功能将无法正确识别用户 IP。')
         );
         $form->addInput($ipSource);
 
@@ -277,7 +277,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             NULL,
             'HTTP_CF_CONNECTING_IP',
             _t('自定义 IP 请求头名称'),
-            _t('<span style="color: #5e6db3;">说明</span> 仅当上面的选项选择“自定义请求头”时生效。例如 Cloudflare 用户可填写 <code>HTTP_CF_CONNECTING_IP</code>。')
+            _t('<span style="color: var(--booadmin-info, #2563eb); font-weight: 500;">说明</span> 仅当上面的选项选择“自定义请求头”时生效。例如 Cloudflare 用户可填写 <code>HTTP_CF_CONNECTING_IP</code>。')
         );
         $form->addInput($customIpHeader);
 
@@ -286,7 +286,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             echo '<h2>' . _t('请求日志与封禁状态') . '</h2>';
             echo self::renderFailLogTable($actionUrl);
         } catch (Exception $e) {
-            echo '<p style="color: #ce5252;">' . _t('风险日志加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
+            echo '<p style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">' . _t('风险日志加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
             error_log('Passport config risk log failed: ' . $e->getMessage());
         }
 
@@ -295,7 +295,7 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             echo '<h2>' . _t('密码重置历史记录') . '</h2>';
             echo self::renderPasswordResetHistory();
         } catch (Exception $e) {
-            echo '<p style="color: #ce5252;">' . _t('密码重置历史加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
+            echo '<p style="color: var(--booadmin-danger, #dc2626); font-weight: 600;">' . _t('密码重置历史加载失败：%s', htmlspecialchars($e->getMessage())) . '</p>';
             error_log('Passport config password reset history failed: ' . $e->getMessage());
         }
 
@@ -938,17 +938,58 @@ JS;
     /**
      * 获取日志表格的样式
      *
+     * 样式对齐 BooAdmin 设计规范，使用 --booadmin-* CSS 变量。
+     * 当 BooAdmin 主题未定义时，自动检测并注入自定义配色作为降级方案。
+     *
      * @return string CSS样式
      */
     private static function getLogTableStyles(): string
     {
-        return <<<CSS
+        // 检测 BooAdmin 是否存在的脚本，若不存在则注入自定义配色变量
+        $detectScript = <<<SCRIPT
+        <script>
+            (function() {
+                // 检测 BooAdmin CSS 变量是否存在
+                var root = document.documentElement;
+                var hasBooAdmin = getComputedStyle(root).getPropertyValue('--booadmin-accent').trim() !== '';
+                
+                // 如果 BooAdmin 未定义，注入自定义配色变量
+                if (!hasBooAdmin) {
+                    // 自定义主题配色方案
+                    var customColors = {
+                        '--booadmin-accent': '#4a6cf7',
+                        '--booadmin-danger': '#dc2626',
+                        '--booadmin-success': '#16a34a',
+                        '--booadmin-info': '#2563eb',
+                        '--booadmin-muted': '#5c5e66',
+                        '--booadmin-text': '#2e3338',
+                        '--booadmin-surface': '#ffffff',
+                        '--booadmin-surface-2': '#f9fafb',
+                        '--booadmin-border': '#e5e7eb',
+                        '--booadmin-border-strong': '#d1d5db',
+                        '--booadmin-placeholder': '#9ca3af',
+                        '--booadmin-on-accent': '#ffffff',
+                        '--booadmin-focus-ring': 'rgba(74, 108, 247, 0.22)',
+                        '--booadmin-table-row-hover': '#f3f4f6'
+                    };
+                    
+                    // 应用自定义配色
+                    for (var key in customColors) {
+                        root.style.setProperty(key, customColors[key]);
+                    }
+                }
+            })();
+        </script>
+SCRIPT;
+
+        return $detectScript . <<<CSS
         <style>
             .passport-log-toolbar {
-                padding: 12px 15px;
-                border-radius: 0px;
-                border: 1px solid #ababab;
+                padding: 12px 16px;
+                border-radius: 0;
+                border: 1px solid var(--booadmin-border, #e5e7eb);
                 margin-bottom: 15px;
+                background-color: var(--booadmin-surface-2, #f9fafb);
             }
             .passport-log-toolbar-inner {
                 display: flex;
@@ -962,38 +1003,41 @@ JS;
                 gap: 8px;
             }
             .passport-log-toolbar .toolbar-label {
-                color: #666;
+                color: var(--booadmin-muted, #5c5e66);
                 font-size: 13px;
                 white-space: nowrap;
+                font-weight: 500;
             }
             .passport-log-toolbar input[type="text"],
             .passport-log-toolbar select {
-                height: 28px;
-                padding: 4px 8px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
+                height: 30px;
+                padding: 4px 10px;
+                border: 1px solid var(--booadmin-border, #e5e7eb);
+                border-radius: 0;
                 font-size: 13px;
-                color: #333;
-                background: white;
-                transition: all 0.2s;
+                color: var(--booadmin-text, #2e3338);
+                background: var(--booadmin-surface, #ffffff);
+                transition: all 0.2s ease;
             }
             .passport-log-toolbar input[type="text"]:focus,
             .passport-log-toolbar select:focus {
                 outline: none;
-                border-color: #5e6db3;
-                box-shadow: 0 0 3px rgba(94, 109, 179, 0.3);
+                border-color: var(--booadmin-accent, #5865f2);
+                box-shadow: 0 0 0 3px var(--booadmin-focus-ring, rgba(88, 101, 242, 0.22));
             }
             .passport-log-toolbar .btn {
-                height: 28px;
-                padding: 4px 12px;
+                height: 30px;
+                padding: 4px 14px;
                 font-size: 13px;
                 line-height: 18px;
+                border-radius: 0;
             }
             .passport-log-pagination {
-                padding: 10px 15px;
-                border-radius: 0px;
-                border: 1px solid #ababab;
+                padding: 12px 16px;
+                border-radius: 0;
+                border: 1px solid var(--booadmin-border, #e5e7eb);
                 margin-top: 15px;
+                background-color: var(--booadmin-surface-2, #f9fafb);
             }
             .passport-log-pagination-inner {
                 display: flex;
@@ -1008,55 +1052,57 @@ JS;
                 align-items: center;
             }
             .passport-log-pagination .page-link {
-                padding: 4px 10px;
-                border: 1px solid #ddd;
-                border-radius: 3px;
+                padding: 5px 12px;
+                border: 1px solid var(--booadmin-border, #e5e7eb);
+                border-radius: 0;
                 text-decoration: none;
-                color: #333;
-                background: white;
+                color: var(--booadmin-text, #2e3338);
+                background: var(--booadmin-surface, #ffffff);
                 font-size: 12px;
-                transition: all 0.2s;
+                font-weight: 500;
+                transition: all 0.2s ease;
                 display: inline-block;
             }
             .passport-log-pagination .page-link:hover {
-                background: #f0f0f0;
-                border-color: #ccc;
+                background-color: var(--booadmin-surface-2, #f9fafb);
+                border-color: var(--booadmin-border-strong, #d1d5db);
                 text-decoration: none;
             }
             .passport-log-pagination .page-link.active {
-                background: #5e6db3;
-                color: white;
-                border-color: #5e6db3;
+                background-color: var(--booadmin-accent, #5865f2);
+                color: var(--booadmin-on-accent, #ffffff);
+                border-color: var(--booadmin-accent, #5865f2);
             }
             .passport-log-pagination .page-ellipsis {
-                padding: 4px 8px;
-                color: #999;
+                padding: 5px 8px;
+                color: var(--booadmin-placeholder, #9ca3af);
             }
             .passport-log-pagination .page-info {
-                color: #666;
+                color: var(--booadmin-muted, #5c5e66);
                 font-size: 12px;
             }
+            /* 状态颜色 - 对齐 BooAdmin 语义色 */
             .passport-log-status-safe {
-                color: #35a937;
+                color: var(--booadmin-success, #16a34a);
                 font-weight: 500;
             }
             .passport-log-status-locked {
-                color: #ce5252;
-                font-weight: bold;
+                color: var(--booadmin-danger, #dc2626);
+                font-weight: 600;
             }
             .passport-log-status-expired {
-                color: #999;
+                color: var(--booadmin-placeholder, #9ca3af);
             }
             .passport-log-status-used {
-                color: #35a937;
+                color: var(--booadmin-success, #16a34a);
                 font-weight: 500;
             }
             .passport-log-status-unused {
-                color: #5e6db3;
+                color: var(--booadmin-accent, #5865f2);
                 font-weight: 500;
             }
             .passport-log-table tbody tr:hover {
-                background-color: #f9f9f9;
+                background-color: var(--booadmin-table-row-hover, #f3f4f6);
             }
             .passport-log-table td {
                 vertical-align: middle;
