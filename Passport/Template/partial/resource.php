@@ -562,7 +562,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
         show: function(message, type, duration) {
             type = type || 'info';
-            duration = duration || 4000;
+            duration = (typeof duration !== 'undefined' && duration !== null) ? duration : 4000;
 
             if (this.currentToast) {
                 this.currentToast.classList.add('hiding');
@@ -616,4 +616,139 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         warning: function(message, duration) { return this.show(message, 'warning', duration); },
         info: function(message, duration)     { return this.show(message, 'info', duration); }
     };
+
+    // 全局输入内容检查与 Session 通知处理
+    document.addEventListener('DOMContentLoaded', function() {
+        // 检查是否有从 PHP Session 传递的通知信息
+        <?php
+        if (isset($_SESSION['passport_notice'])) {
+            $notice = $_SESSION['passport_notice'];
+            unset($_SESSION['passport_notice']);
+            echo 'var passportNoticeData = ' . json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) . ';';
+        } else {
+            echo 'var passportNoticeData = null;';
+        }
+        ?>
+
+        if (passportNoticeData) {
+            var message = passportNoticeData.message || '';
+            var type = passportNoticeData.type || 'info';
+            var countdown = passportNoticeData.countdown || 0;
+
+            if (countdown > 0) {
+                var minutes = Math.floor(countdown / 60);
+                var seconds = countdown % 60;
+                var countdownMsg = message + ' \u8BF7\u5728 <span id="countdown-min">' + minutes + '</span> \u5206 <span id="countdown-sec">' + (seconds < 10 ? '0' + seconds : seconds) + '</span> \u79D2\u540E\u91CD\u8BD5\u3002';
+
+                PassportToast.show(countdownMsg, type, 0);
+
+                // show() 已同步 appendChild 到 body，但为保险起见用懒初始化缓存引用
+                var remainingSeconds = countdown;
+                var mEl = null, sEl = null;
+                var countdownTimer = setInterval(function() {
+                    remainingSeconds--;
+
+                    if (remainingSeconds <= 0) {
+                        clearInterval(countdownTimer);
+                        var messageDiv = document.querySelector('.passport-toast-message');
+                        if (messageDiv) {
+                            messageDiv.textContent = '\u73B0\u5728\u53EF\u4EE5\u5237\u65B0\u9875\u9762\u91CD\u8BD5\u4E86\u3002';
+                        }
+                        setTimeout(function() { PassportToast.hide(); }, 1000);
+                        return;
+                    }
+
+                    // 懒初始化：首次回调时获取并缓存 DOM 引用
+                    if (!mEl) mEl = document.getElementById('countdown-min');
+                    if (!sEl) sEl = document.getElementById('countdown-sec');
+
+                    if (mEl && sEl) {
+                        mEl.textContent = Math.floor(remainingSeconds / 60);
+                        var rs = remainingSeconds % 60;
+                        sEl.textContent = rs < 10 ? '0' + rs : '' + rs;
+                    }
+                }, 1000);
+            } else {
+                PassportToast.show(message, type, 5000);
+            }
+        }
+
+        // 为所有表单添加基本验证
+        var forms = document.querySelectorAll('.passport-form');
+        forms.forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                var requiredInputs = form.querySelectorAll('[required]');
+                var isValid = true;
+                var errorMessage = '';
+
+                requiredInputs.forEach(function(input) {
+                    if (!input.value.trim()) {
+                        isValid = false;
+                        input.style.borderColor = 'var(--passport-danger)';
+                        var label = input.closest('.passport-form-group').querySelector('.passport-label');
+                        if (label) {
+                            errorMessage = '\u8BF7\u586B\u5199' + label.textContent.replace(' *', '');
+                        }
+                    } else {
+                        input.style.borderColor = 'var(--passport-border)';
+
+                        if (input.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) {
+                            isValid = false;
+                            input.style.borderColor = 'var(--passport-danger)';
+                            errorMessage = '\u8BF7\u8F93\u5165\u6709\u6548\u7684\u90AE\u7BB1\u5730\u5740';
+                        }
+
+                        if (input.name === 'password' && input.value.length < 8) {
+                            isValid = false;
+                            input.style.borderColor = 'var(--passport-danger)';
+                            errorMessage = '\u5BC6\u7801\u957F\u5EA6\u81F3\u5C11\u4E3A 4 \u4F4D';
+                        }
+
+                        if (input.name === 'confirm') {
+                            var passwordInput = form.querySelector('input[name="password"]');
+                            if (passwordInput && input.value !== passwordInput.value) {
+                                isValid = false;
+                                input.style.borderColor = 'var(--passport-danger)';
+                                errorMessage = '\u4E24\u6B21\u5BC6\u7801\u8F93\u5165\u4E0D\u4E00\u81F4';
+                            }
+                        }
+                    }
+                });
+
+                if (!isValid) {
+                    e.preventDefault();
+                    PassportToast.show(errorMessage, 'error');
+                }
+            });
+
+            // 输入框焦点事件
+            var inputs = form.querySelectorAll('.passport-input');
+            inputs.forEach(function(input) {
+                input.addEventListener('focus', function() {
+                    this.style.borderColor = 'var(--passport-primary)';
+                });
+
+                input.addEventListener('blur', function() {
+                    if (!this.value.trim()) {
+                        this.style.borderColor = 'var(--passport-border)';
+                    } else {
+                        if (this.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.value)) {
+                            this.style.borderColor = 'var(--passport-danger)';
+                        } else if (this.name === 'password' && this.value.length < 8) {
+                            this.style.borderColor = 'var(--passport-danger)';
+                        } else if (this.name === 'confirm') {
+                            var passwordInput = form.querySelector('input[name="password"]');
+                            if (passwordInput && this.value !== passwordInput.value) {
+                                this.style.borderColor = 'var(--passport-danger)';
+                            } else {
+                                this.style.borderColor = 'var(--passport-border)';
+                            }
+                        } else {
+                            this.style.borderColor = 'var(--passport-border)';
+                        }
+                    }
+                });
+            });
+        });
+    });
 </script>
