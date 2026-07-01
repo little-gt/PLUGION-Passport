@@ -419,60 +419,90 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         border-left-color: var(--passport-warning);
     }
 
-    /* === Toast 通知系统 (矩形: border-radius: 0) === */
+    /* === Toast 通知系统 === */
     .passport-toast {
         position: fixed;
         top: 20px;
         right: 20px;
-        padding: 14px 18px;
+        padding: 14px 16px;
         border-radius: 0;
-        font-size: 14px;
+        font-size: 13px;
         z-index: 99999;
         display: flex;
         align-items: flex-start;
         gap: 12px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        min-width: 280px;
-        max-width: 400px;
+        transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        min-width: 300px;
+        max-width: 360px;
         opacity: 0;
-        transform: translateX(100px);
-        animation: passportSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        border: 1px solid;
-        box-shadow: var(--passport-shadow-md);
+        transform: translateX(400px);
+        animation: passportSlideIn 0.35s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        border: 1px solid var(--passport-border);
+        border-left: 3px solid;
+        box-shadow: none;
+        background: var(--passport-card-bg);
+        color: var(--passport-text);
     }
 
+    /* === 语义色样式 (左边框强调) === */
     .passport-toast.success {
-        background-color: var(--passport-success-bg);
-        border-color: var(--passport-success);
+        border-left-color: var(--passport-success);
+    }
+
+    .passport-toast.success .passport-toast-icon {
+        color: var(--passport-success);
+    }
+
+    .passport-toast.success .passport-toast-title {
         color: var(--passport-success);
     }
 
     .passport-toast.error {
-        background-color: var(--passport-error-bg);
-        border-color: var(--passport-error);
+        border-left-color: var(--passport-danger);
+    }
+
+    .passport-toast.error .passport-toast-icon {
+        color: var(--passport-danger);
+    }
+
+    .passport-toast.error .passport-toast-title {
         color: var(--passport-error);
     }
 
     .passport-toast.warning {
-        background-color: var(--passport-warning-bg);
-        border-color: var(--passport-warning);
+        border-left-color: var(--passport-warning);
+    }
+
+    .passport-toast.warning .passport-toast-icon {
+        color: var(--passport-warning);
+    }
+
+    .passport-toast.warning .passport-toast-title {
         color: var(--passport-warning);
     }
 
     .passport-toast.info {
-        background-color: var(--passport-info-bg);
-        border-color: var(--passport-info);
+        border-left-color: var(--passport-info);
+    }
+
+    .passport-toast.info .passport-toast-icon {
         color: var(--passport-info);
     }
 
+    .passport-toast.info .passport-toast-title {
+        color: var(--passport-text);
+    }
+
+    /* === 通知图标 (18x18px) === */
     .passport-toast-icon {
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 22px;
-        height: 22px;
-        color: inherit;
+        width: 18px;
+        height: 18px;
+        color: var(--passport-muted);
+        margin-top: 2px;
     }
 
     .passport-toast-icon svg {
@@ -485,45 +515,80 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         stroke-linejoin: round;
     }
 
-    .passport-toast-message {
+    /* === 通知内容区域 === */
+    .passport-toast-content {
         flex: 1;
-        color: inherit;
-        line-height: 1.5;
-        word-break: break-word;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    /* === 通知标题 (font-size: 13px, font-weight: 600) === */
+    .passport-toast-title {
+        font-weight: 600;
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--passport-text);
+    }
+
+    /* === 通知消息列表 === */
+    .passport-toast-messages {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .passport-toast-messages li {
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--passport-muted);
+        margin-bottom: 0;
+    }
+
+    .passport-toast-messages li:not(:last-child) {
+        margin-bottom: 2px;
     }
 
     .passport-toast-close {
         background: none;
         border: none;
-        font-size: 20px;
+        font-size: 16px;
         line-height: 1;
         cursor: pointer;
-        color: inherit;
-        opacity: 0.5;
+        color: var(--passport-border-strong);
+        opacity: 1;
         padding: 0;
         margin-left: 8px;
         flex-shrink: 0;
-        width: 20px;
-        height: 20px;
-        transition: opacity 0.2s ease;
+        width: 18px;
+        height: 18px;
+        transition: color 0.2s ease;
+        margin-top: 2px;
     }
 
     .passport-toast-close:hover {
-        opacity: 0.85;
+        color: var(--passport-muted);
     }
 
-    .passport-toast.hiding {
-        animation: passportSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    .passport-toast.show {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .passport-toast.hide {
+        opacity: 0;
+        transform: translateX(400px);
+        transition: all 0.2s ease-out;
     }
 
     @keyframes passportSlideIn {
-        from { opacity: 0; transform: translateX(100px); }
+        from { opacity: 0; transform: translateX(400px); }
         to   { opacity: 1; transform: translateX(0); }
     }
 
     @keyframes passportSlideOut {
         from { opacity: 1; transform: translateX(0); }
-        to   { opacity: 0; transform: translateX(100px); }
+        to   { opacity: 0; transform: translateX(400px); }
     }
 
     /* === 响应式适配 === */
@@ -547,7 +612,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 <?php // --- JavaScript 脚本 --- ?>
 
 <script>
-    // SVG 图标库
+    // SVG 图标库 (对齐 BooAdmin FontAwesome 图标风格)
     var PassportSVGIcons = {
         check: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
         x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
@@ -555,35 +620,70 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         info: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
     };
 
+    // 标题映射 (对齐 BooAdmin)
+    var PassportTitles = {
+        'success': '操作成功',
+        'error': '出错了',
+        'notice': '注意',
+        'warning': '警告',
+        'info': '提示'
+    };
+
     // Toast 通知系统
     var PassportToast = {
         currentToast: null,
         hideTimer: null,
 
-        show: function(message, type, duration) {
+        show: function(messages, type, duration) {
             type = type || 'info';
-            duration = (typeof duration !== 'undefined' && duration !== null) ? duration : 4000;
+            duration = (typeof duration !== 'undefined' && duration !== null) ? duration : 5000;
 
             if (this.currentToast) {
-                this.currentToast.classList.add('hiding');
+                this.currentToast.classList.add('hide');
                 clearTimeout(this.hideTimer);
                 var toast = this.currentToast;
                 setTimeout(function() {
                     if (toast.parentNode) toast.parentNode.removeChild(toast);
-                }, 300);
+                }, 200);
             }
 
             var toastEl = document.createElement('div');
             toastEl.className = 'passport-toast ' + type;
 
+            // 构建消息列表 (对齐 BooAdmin: 单条或多条消息)
+            var messagesHTML = '';
+            if (Array.isArray(messages)) {
+                if (messages.length === 1) {
+                    messagesHTML = '<div class="passport-toast-messages">' + messages[0] + '</div>';
+                } else {
+                    messagesHTML = '<ul class="passport-toast-messages">';
+                    messages.forEach(function(msg) {
+                        messagesHTML += '<li>' + msg + '</li>';
+                    });
+                    messagesHTML += '</ul>';
+                }
+            } else {
+                messagesHTML = '<div class="passport-toast-messages">' + messages + '</div>';
+            }
+
             var iconSvg = PassportSVGIcons[type] || PassportSVGIcons.info;
+            
+            // 对齐 BooAdmin 结构: 图标 + 内容区域(标题+消息) + 关闭按钮
             toastEl.innerHTML =
-                '<div class="passport-toast-icon ' + type + '">' + iconSvg + '</div>' +
-                '<div class="passport-toast-message">' + message + '</div>' +
-                '<button class="passport-toast-close">&times;</button>';
+                '<div class="passport-toast-icon">' + iconSvg + '</div>' +
+                '<div class="passport-toast-content">' +
+                    '<div class="passport-toast-title">' + PassportTitles[type] + '</div>' +
+                    messagesHTML +
+                '</div>' +
+                '<button class="passport-toast-close" aria-label="关闭">×</button>';
 
             document.body.appendChild(toastEl);
             this.currentToast = toastEl;
+
+            // 显示动画 (添加 show 类)
+            setTimeout(function() {
+                toastEl.classList.add('show');
+            }, 10);
 
             var closeBtn = toastEl.querySelector('.passport-toast-close');
             closeBtn.addEventListener('click', function() {
@@ -601,20 +701,22 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
         hide: function(toastEl) {
             if (!toastEl) return;
-            toastEl.classList.add('hiding');
+            toastEl.classList.remove('show');
+            toastEl.classList.add('hide');
             clearTimeout(this.hideTimer);
             setTimeout(function() {
                 if (toastEl.parentNode) toastEl.parentNode.removeChild(toastEl);
                 if (PassportToast.currentToast === toastEl) {
                     PassportToast.currentToast = null;
                 }
-            }, 300);
+            }, 200);
         },
 
-        success: function(message, duration) { return this.show(message, 'success', duration); },
-        error: function(message, duration)   { return this.show(message, 'error', duration); },
-        warning: function(message, duration) { return this.show(message, 'warning', duration); },
-        info: function(message, duration)     { return this.show(message, 'info', duration); }
+        success: function(messages, duration) { return this.show(messages, 'success', duration); },
+        error: function(messages, duration)   { return this.show(messages, 'error', duration); },
+        warning: function(messages, duration) { return this.show(messages, 'warning', duration); },
+        notice: function(messages, duration)  { return this.show(messages, 'notice', duration); },
+        info: function(messages, duration)     { return this.show(messages, 'info', duration); }
     };
 
     // 全局输入内容检查与 Session 通知处理
@@ -631,18 +733,19 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
         ?>
 
         if (passportNoticeData) {
-            var message = passportNoticeData.message || '';
+            var messages = passportNoticeData.message || '';
             var type = passportNoticeData.type || 'info';
             var countdown = passportNoticeData.countdown || 0;
 
             if (countdown > 0) {
                 var minutes = Math.floor(countdown / 60);
                 var seconds = countdown % 60;
-                var countdownMsg = message + ' \u8BF7\u5728 <span id="countdown-min">' + minutes + '</span> \u5206 <span id="countdown-sec">' + (seconds < 10 ? '0' + seconds : seconds) + '</span> \u79D2\u540E\u91CD\u8BD5\u3002';
+                var countdownMsg = [
+                    messages + ' 请在 <span id="countdown-min">' + minutes + '</span> 分 <span id="countdown-sec">' + (seconds < 10 ? '0' + seconds : seconds) + '</span> 秒后重试。'
+                ];
 
                 PassportToast.show(countdownMsg, type, 0);
 
-                // show() 已同步 appendChild 到 body，但为保险起见用懒初始化缓存引用
                 var remainingSeconds = countdown;
                 var mEl = null, sEl = null;
                 var countdownTimer = setInterval(function() {
@@ -650,15 +753,14 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
                     if (remainingSeconds <= 0) {
                         clearInterval(countdownTimer);
-                        var messageDiv = document.querySelector('.passport-toast-message');
+                        var messageDiv = document.querySelector('.passport-toast-messages');
                         if (messageDiv) {
-                            messageDiv.textContent = '\u73B0\u5728\u53EF\u4EE5\u5237\u65B0\u9875\u9762\u91CD\u8BD5\u4E86\u3002';
+                            messageDiv.textContent = '现在可以刷新页面重试了。';
                         }
                         setTimeout(function() { PassportToast.hide(); }, 1000);
                         return;
                     }
 
-                    // 懒初始化：首次回调时获取并缓存 DOM 引用
                     if (!mEl) mEl = document.getElementById('countdown-min');
                     if (!sEl) sEl = document.getElementById('countdown-sec');
 
@@ -669,7 +771,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
                     }
                 }, 1000);
             } else {
-                PassportToast.show(message, type, 5000);
+                PassportToast.show(messages, type, 5000);
             }
         }
 

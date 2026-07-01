@@ -9,8 +9,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  *
  * @package Passport
  * @author GARFIELDTOM
- * @copyright Copyright (c) 2025 GARFIELDTOM & 小否先生
- * @version 1.1.2
+ * @copyright Copyright (c) 2026 GARFIELDTOM & 小否先生
+ * @version 1.1.3
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */

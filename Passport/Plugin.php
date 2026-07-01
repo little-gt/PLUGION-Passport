@@ -9,8 +9,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  *
  * @package Passport
  * @author GARFIELDTOM
- * @copyright Copyright (c) 2025 GARFIELDTOM
- * @version 1.1.2
+ * @copyright Copyright (c) 2026 GARFIELDTOM
+ * @version 1.1.3
  * @link https://garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
@@ -563,11 +563,12 @@ class Passport_Plugin implements Typecho_Plugin_Interface
         try {
             // 构建查询条件
             $thirtyDaysAgo = time() - (30 * 86400);
-            $select = $db->select()->from("{$prefix}password_reset_tokens")->where("created_at > ?", $thirtyDaysAgo);
+            // 使用表别名确保跨数据库兼容性
+            $select = $db->select()->from("{$prefix}password_reset_tokens AS tokens")->where("tokens.created_at > ?", $thirtyDaysAgo);
             
             // 添加搜索条件
             if (!empty($searchUid) && is_numeric($searchUid)) {
-                $select->where("uid = ?", (int)$searchUid);
+                $select->where("tokens.uid = ?", (int)$searchUid);
             }
 
             // 获取总记录数
@@ -579,10 +580,11 @@ class Passport_Plugin implements Typecho_Plugin_Interface
             $totalPages = (int) ceil($total / $pageSize);
 
             // 获取当前页数据（关联用户表获取邮箱）
+            // 使用 AS 关键字定义表别名，确保 PostgreSQL 和 SQLite 兼容性
             $logs = $db->fetchAll($select
-                ->join("{$prefix}users", "{$prefix}password_reset_tokens.uid = {$prefix}users.uid", Typecho_Db::LEFT_JOIN)
-                ->select("{$prefix}password_reset_tokens.uid", "{$prefix}password_reset_tokens.token", "{$prefix}password_reset_tokens.created_at", "{$prefix}password_reset_tokens.used", "{$prefix}users.mail")
-                ->order("{$prefix}password_reset_tokens.created_at", Typecho_Db::SORT_DESC)
+                ->join("{$prefix}users AS users", "tokens.uid = users.uid", Typecho_Db::LEFT_JOIN)
+                ->select("tokens.uid", "tokens.token", "tokens.created_at", "tokens.used", "users.mail")
+                ->order("tokens.created_at", Typecho_Db::SORT_DESC)
                 ->limit($pageSize)
                 ->offset($offset));
         } catch (Typecho_Db_Exception $e) {
@@ -873,17 +875,40 @@ JS;
         $table = $prefix . 'password_reset_tokens';
         $adapterName = $db->getAdapterName();
 
-        $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
-            `token` VARCHAR(64) NOT NULL,
-            `uid` INT(10) NOT NULL,
-            `created_at` INT(10) NOT NULL,
-            `used` TINYINT(1) DEFAULT 0,
-            PRIMARY KEY (`token`),
-            INDEX `uid` (`uid`),
-            INDEX `created_at` (`created_at`)
-        )";
-
-        if (false !== strpos($adapterName, 'Mysql')) {
+        if (false !== strpos($adapterName, 'Pgsql')) {
+            // PostgreSQL: 使用标准类型，不支持 UNSIGNED 和 TINYINT
+            $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+                token VARCHAR(64) NOT NULL,
+                uid INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                used SMALLINT DEFAULT 0,
+                PRIMARY KEY (token)
+            )";
+            // PostgreSQL 创建索引需要单独执行
+            try {
+                $db->query("CREATE INDEX IF NOT EXISTS idx_{$table}_uid ON {$table} (uid)");
+                $db->query("CREATE INDEX IF NOT EXISTS idx_{$table}_created_at ON {$table} (created_at)");
+            } catch (Exception $e) {
+                // 索引可能已存在，忽略错误
+            }
+        } elseif (false !== strpos($adapterName, 'SQLite')) {
+            // SQLite: 使用 INTEGER，不支持 UNSIGNED，TINYINT 会自动转换为 INTEGER
+            $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+                token VARCHAR(64) NOT NULL,
+                uid INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                used INTEGER DEFAULT 0,
+                PRIMARY KEY (token)
+            )";
+            // SQLite 创建索引
+            try {
+                $db->query("CREATE INDEX IF NOT EXISTS idx_{$table}_uid ON {$table} (uid)");
+                $db->query("CREATE INDEX IF NOT EXISTS idx_{$table}_created_at ON {$table} (created_at)");
+            } catch (Exception $e) {
+                // 紫引可能已存在，忽略错误
+            }
+        } else {
+            // MySQL: 使用 MySQL 特有的优化语法
             $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
                 `token` VARCHAR(64) NOT NULL,
                 `uid` INT(10) UNSIGNED NOT NULL,
@@ -912,16 +937,38 @@ JS;
         $table = $prefix . 'passport_fails';
         $adapterName = $db->getAdapterName();
 
-        $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
-            `ip` VARCHAR(45) NOT NULL,
-            `attempts` INT(10) NOT NULL DEFAULT 0,
-            `last_attempt` INT(10) NOT NULL,
-            `locked_until` INT(10) NOT NULL DEFAULT 0,
-            PRIMARY KEY (`ip`),
-            INDEX `locked_until` (`locked_until`)
-        )";
-
-        if (false !== strpos($adapterName, 'Mysql')) {
+        if (false !== strpos($adapterName, 'Pgsql')) {
+            // PostgreSQL: 使用标准类型
+            $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+                ip VARCHAR(45) NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_attempt INTEGER NOT NULL,
+                locked_until INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (ip)
+            )";
+            // PostgreSQL 创建索引需要单独执行
+            try {
+                $db->query("CREATE INDEX IF NOT EXISTS idx_{$table}_locked_until ON {$table} (locked_until)");
+            } catch (Exception $e) {
+                // 紫引可能已存在，忽略错误
+            }
+        } elseif (false !== strpos($adapterName, 'SQLite')) {
+            // SQLite: 使用 INTEGER
+            $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+                ip VARCHAR(45) NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_attempt INTEGER NOT NULL,
+                locked_until INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (ip)
+            )";
+            // SQLite 创建索引
+            try {
+                $db->query("CREATE INDEX IF NOT EXISTS idx_{$table}_locked_until ON {$table} (locked_until)");
+            } catch (Exception $e) {
+                // 紫引可能已存在，忽略错误
+            }
+        } else {
+            // MySQL: 使用 MySQL 特有的优化语法
             $sql = "CREATE TABLE IF NOT EXISTS `{$table}` (
                 `ip` VARCHAR(45) NOT NULL,
                 `attempts` INT(10) UNSIGNED NOT NULL DEFAULT 0,
