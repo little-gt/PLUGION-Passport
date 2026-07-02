@@ -11,7 +11,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  * @author GARFIELDTOM
  * @copyright Copyright (c) 2026 GARFIELDTOM
  * @version 1.1.3
- * @link https://garfieldtom.cool/
+ * @link https://www.garfieldtom.cool/
  * @license GNU General Public License 2.0
  */
 
